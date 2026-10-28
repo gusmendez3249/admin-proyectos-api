@@ -1,0 +1,111 @@
+// Pipeline CI de la base de datos dbgestor (PostgreSQL)
+// Job de Jenkins: Pipeline desde SCM (repo admin-proyectos-api), Script Path = database/Jenkinsfile
+// Requiere en Jenkins:
+//   - Agente con psql (postgresql-client), SQLFluff y Semgrep (ver evidencia-unidad2/Dockerfile-jenkins)
+//   - Servidor PostgreSQL accesible como "postgres-ci" (servicio del docker-compose de DevSecOps)
+//   - Credencial "postgres-ci" (Username with password) con permiso para crear bases de datos
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        PGHOST = 'postgres-ci'
+        PGPORT = '5432'
+        PGCLIENTENCODING = 'UTF8'
+        // BD efimera por ejecucion: no se toca la BD de desarrollo
+        DB_CI = "dbgestor_ci_${env.BUILD_NUMBER}"
+        SCRIPT_BD = 'dbgestor-postgres.sql'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Calidad SQL (SQLFluff)') {
+            steps {
+                // Reglas y dialecto en .sqlfluff; cualquier violacion detiene el pipeline
+                sh '''
+                    sqlfluff --version
+                    sqlfluff lint "$SCRIPT_BD" database/pruebas \
+                        --format json --write-output sqlfluff-report.json --nofail
+                    sqlfluff lint "$SCRIPT_BD" database/pruebas
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'sqlfluff-report.json'
+                }
+            }
+        }
+
+        stage('Analisis Semgrep (secretos)') {
+            steps {
+                sh '''
+                    semgrep scan --config p/secrets --metrics=off --exclude target \
+                        --json-output=semgrep-bd-report.json --text-output=semgrep-bd-report.txt \
+                        "$SCRIPT_BD" database
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'semgrep-bd-report.*'
+                }
+            }
+        }
+
+        stage('Desplegar en BD efimera') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'postgres-ci',
+                                                  usernameVariable: 'PGUSER', passwordVariable: 'PGPASSWORD')]) {
+                    sh '''
+                        psql --version
+                        psql -v ON_ERROR_STOP=1 -d postgres -c "DROP DATABASE IF EXISTS $DB_CI"
+                        psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE $DB_CI"
+                        # Se aplica dos veces para comprobar que el script es idempotente (re-ejecutable)
+                        psql -v ON_ERROR_STOP=1 -q -d "$DB_CI" -f "$SCRIPT_BD"
+                        psql -v ON_ERROR_STOP=1 -q -d "$DB_CI" -f "$SCRIPT_BD"
+                    '''
+                }
+            }
+        }
+
+        stage('Pruebas de la BD') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'postgres-ci',
+                                                  usernameVariable: 'PGUSER', passwordVariable: 'PGPASSWORD')]) {
+                    // sh usa /bin/sh (sin pipefail): se guarda el codigo de salida de psql antes de mostrar el log
+                    sh '''
+                        rc=0
+                        psql -v ON_ERROR_STOP=1 -q -d "$DB_CI" -f database/pruebas/validar_esquema.sql \
+                            > pruebas-bd.log 2>&1 || rc=$?
+                        cat pruebas-bd.log
+                        exit $rc
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'pruebas-bd.log'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // La BD efimera se elimina siempre, aun si fallan las pruebas
+            withCredentials([usernamePassword(credentialsId: 'postgres-ci',
+                                              usernameVariable: 'PGUSER', passwordVariable: 'PGPASSWORD')]) {
+                sh 'psql -d postgres -c "DROP DATABASE IF EXISTS $DB_CI" || true'
+            }
+        }
+    }
+}

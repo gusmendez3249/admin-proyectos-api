@@ -1,0 +1,7 @@
+# Configuracion de SQLFluff (linter de SQL) usada por el pipeline de base de datos
+[sqlfluff]
+dialect = postgres
+max_line_length = 120
+
+[sqlfluff:indentation]
+tab_space_size = 2
