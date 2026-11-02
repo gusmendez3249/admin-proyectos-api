@@ -65,7 +65,7 @@ CREATE TABLE `comentarios` (
 
 LOCK TABLES `comentarios` WRITE;
 /*!40000 ALTER TABLE `comentarios` DISABLE KEYS */;
-INSERT INTO `comentarios` VALUES (201,'Subirlo YA!!!','2024-06-26 13:48:00','Perla Joceline Martínez Meza',199),(202,'hola','2024-06-26 13:49:00','Liliana Gómez Martínez',199);
+INSERT INTO `comentarios` VALUES (201,'Subirlo YA!!!','2024-06-26 13:48:00','Usuario Demo Tres',199),(202,'hola','2024-06-26 13:49:00','Usuario Demo Dos',199);
 /*!40000 ALTER TABLE `comentarios` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -173,7 +173,7 @@ CREATE TABLE `usuario` (
 
 LOCK TABLES `usuario` WRITE;
 /*!40000 ALTER TABLE `usuario` DISABLE KEYS */;
-INSERT INTO `usuario` VALUES (131,'Ana Paola Ramírez Vázquez','ana22533@cbtis75.edu.mx','0722','Estudiante','#70FAB7'),(172,'Liliana Gómez Martínez','liliana22512@cbtis75.edu.mx','ada','Estudiante','#54EA01'),(196,'Perla Joceline Martínez Meza','perla22522@cbtis75.edu.mx','12345','Estudiante','#805611');
+INSERT INTO `usuario` VALUES (131,'Usuario Demo Uno','demo1@gestor.test','$2a$10$qwavKxCFRv34KDWHHOeyue/QHqlNz5l/3WebtOibm65s8SVCxU9h.','Estudiante','#70FAB7'),(172,'Usuario Demo Dos','demo2@gestor.test','$2a$10$V3AuLgyTmjCwuMt68l.TAu50qRlvxw4Jcgkc8lj7XWAzws7MWpCV2','Estudiante','#54EA01'),(196,'Usuario Demo Tres','demo3@gestor.test','$2a$10$jZ7NclxXwgnykSAuvzquluUJfS1Wq.7XsWaLFeWtm4sPtO.g7kRPu','Estudiante','#805611');
 /*!40000 ALTER TABLE `usuario` ENABLE KEYS */;
 UNLOCK TABLES;
 

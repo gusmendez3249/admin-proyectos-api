@@ -6,6 +6,9 @@
 --   \c dbgestor
 --   \i dbgestor-postgres.sql
 --
+-- Datos de demostracion anonimizados. Las contrasenas se guardan con BCrypt
+-- (la de los 3 usuarios demo es "Demo1234").
+--
 -- Las columnas de fecha son varchar porque las entidades JPA las mapean como String
 -- (MariaDB convertia texto a date de forma implicita; PostgreSQL no).
 
@@ -62,9 +65,30 @@ CREATE INDEX asignaciones_usuario_fk ON asignaciones (id_usuario);
 CREATE INDEX asignaciones_tareas_fk ON asignaciones (id_tarea);
 
 INSERT INTO usuario (id_usuario, nombre, correo_electronico, contrasena, rol, imagen_usuario) VALUES
-(131, 'Ana Paola Ramírez Vázquez', 'ana22533@cbtis75.edu.mx', '0722', 'Estudiante', '#70FAB7'),
-(172, 'Liliana Gómez Martínez', 'liliana22512@cbtis75.edu.mx', 'ada', 'Estudiante', '#54EA01'),
-(196, 'Perla Joceline Martínez Meza', 'perla22522@cbtis75.edu.mx', '12345', 'Estudiante', '#805611');
+(
+  131,
+  'Usuario Demo Uno',
+  'demo1@gestor.test',
+  '$2a$10$qwavKxCFRv34KDWHHOeyue/QHqlNz5l/3WebtOibm65s8SVCxU9h.',
+  'Estudiante',
+  '#70FAB7'
+),
+(
+  172,
+  'Usuario Demo Dos',
+  'demo2@gestor.test',
+  '$2a$10$V3AuLgyTmjCwuMt68l.TAu50qRlvxw4Jcgkc8lj7XWAzws7MWpCV2',
+  'Estudiante',
+  '#54EA01'
+),
+(
+  196,
+  'Usuario Demo Tres',
+  'demo3@gestor.test',
+  '$2a$10$jZ7NclxXwgnykSAuvzquluUJfS1Wq.7XsWaLFeWtm4sPtO.g7kRPu',
+  'Estudiante',
+  '#805611'
+);
 
 INSERT INTO proyectos (
   id_proyecto, nombre, descripcion, fecha_inicio, fecha_finalizacion, estado_proyecto, fondo
@@ -83,8 +107,8 @@ INSERT INTO tareas (id_tarea, nombre, descripcion, fecha_vencimiento, estado, li
 (199, 'Base de datos', 'Realizar la estructura de las tablas', '2024-06-13', 'danger', 'terminado', 197);
 
 INSERT INTO comentarios (id_comentario, texto_comentario, fecha_hora, id_usuario, id_tarea) VALUES
-(201, 'Subirlo YA!!!', '2024-06-26 13:48:00', 'Perla Joceline Martínez Meza', 199),
-(202, 'hola', '2024-06-26 13:49:00', 'Liliana Gómez Martínez', 199);
+(201, 'Subirlo YA!!!', '2024-06-26 13:48:00', 'Usuario Demo Tres', 199),
+(202, 'hola', '2024-06-26 13:49:00', 'Usuario Demo Dos', 199);
 
 -- Continuar los IDs autogenerados donde los dejaba MariaDB (AUTO_INCREMENT)
 SELECT setval(pg_get_serial_sequence('usuario', 'id_usuario'), 197, false);

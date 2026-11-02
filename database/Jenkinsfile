@@ -1,7 +1,7 @@
 // Pipeline CI de la base de datos dbgestor (PostgreSQL)
 // Job de Jenkins: Pipeline desde SCM (repo admin-proyectos-api), Script Path = database/Jenkinsfile
 // Requiere en Jenkins:
-//   - Agente con psql (postgresql-client), SQLFluff y Semgrep (ver evidencia-unidad2/Dockerfile-jenkins)
+//   - Agente con psql (postgresql-client), SQLFluff y Semgrep (ver evidencia-practica3/infra/jenkins/Dockerfile)
 //   - Servidor PostgreSQL accesible como "postgres-ci" (servicio del docker-compose de DevSecOps)
 //   - Credencial "postgres-ci" (Username with password) con permiso para crear bases de datos
 pipeline {

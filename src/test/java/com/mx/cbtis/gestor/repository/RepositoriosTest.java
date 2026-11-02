@@ -29,23 +29,31 @@ class RepositoriosTest {
 	private ComentariosRepository comentarios;
 
 	@Test
-	void findByCorreoPassSoloCoincideConCredencialesCorrectas() {
-		usuarios.save(new Usuario(null, "Ana", "ana@mail.com", "1234", "Estudiante", "#112233"));
+	void findByCorreoSoloCoincideConElCorreoExacto() {
+		usuarios.save(new Usuario(null, "Ana", "ana@mail.com", "$2a$10$hash", "Estudiante", "#112233"));
 
-		Optional<Usuario> valido = usuarios.findByCorreoPass("ana@mail.com", "1234");
-		assertTrue(valido.isPresent());
-		assertEquals("Ana", valido.get().getNombre());
+		Optional<Usuario> encontrado = usuarios.findByCorreo("ana@mail.com");
+		assertTrue(encontrado.isPresent());
+		assertEquals("Ana", encontrado.get().getNombre());
 
-		assertFalse(usuarios.findByCorreoPass("ana@mail.com", "mala").isPresent());
-		assertFalse(usuarios.findByCorreoPass("otro@mail.com", "1234").isPresent());
+		assertFalse(usuarios.findByCorreo("otro@mail.com").isPresent());
+		assertFalse(usuarios.findByCorreo(null).isPresent());
 	}
 
 	@Test
-	void findByCorreoPassNoEsVulnerableAInyeccionSql() {
-		usuarios.save(new Usuario(null, "Ana", "ana@mail.com", "1234", "Estudiante", "#112233"));
+	void findByCorreoConCorreoRepetidoDevuelveUnSoloUsuario() {
+		usuarios.save(new Usuario(null, "Ana", "ana@mail.com", "x", "Estudiante", "#112233"));
+		usuarios.save(new Usuario(null, "Ana 2", "ana@mail.com", "y", "Estudiante", "#112233"));
 
-		assertFalse(usuarios.findByCorreoPass("ana@mail.com' --", "x").isPresent());
-		assertFalse(usuarios.findByCorreoPass("ana@mail.com", "' OR '1'='1").isPresent());
+		assertTrue(usuarios.findByCorreo("ana@mail.com").isPresent());
+	}
+
+	@Test
+	void findByCorreoNoEsVulnerableAInyeccionSql() {
+		usuarios.save(new Usuario(null, "Ana", "ana@mail.com", "x", "Estudiante", "#112233"));
+
+		assertFalse(usuarios.findByCorreo("ana@mail.com' --").isPresent());
+		assertFalse(usuarios.findByCorreo("' OR '1'='1").isPresent());
 	}
 
 	@Test

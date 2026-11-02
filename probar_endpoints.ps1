@@ -33,7 +33,7 @@ function Test-Endpoint {
 Write-Host "`n--- 1. ENDPOINTS DE USUARIOS ---" -ForegroundColor Yellow
 $usuarios = Test-Endpoint -Nombre "Obtener todos los usuarios" -Metodo "POST" -Path "/buscarUsuarios"
 $usuarioUnit = Test-Endpoint -Nombre "Buscar usuario por ID" -Metodo "GET" -Path "/buscarUsuario?id=131"
-$login = Test-Endpoint -Nombre "Login de usuario" -Metodo "POST" -Path "/getUsuarioLogin" -Body '{"correo_electronico":"ana22533@cbtis75.edu.mx","contrasena":"0722"}'
+$login = Test-Endpoint -Nombre "Login de usuario" -Metodo "POST" -Path "/getUsuarioLogin" -Body '{"correo_electronico":"demo1@gestor.test","contrasena":"Demo1234"}'
 
 Write-Host "`n--- 2. ENDPOINTS DE PROYECTOS ---" -ForegroundColor Yellow
 $proyectos = Test-Endpoint -Nombre "Obtener todos los proyectos" -Metodo "POST" -Path "/buscarProyectos"

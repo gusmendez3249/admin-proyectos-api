@@ -137,18 +137,12 @@ END $$;
 -- BD-06 Las consultas nativas de los repositorios de la API devuelven lo esperado
 DO $$
 BEGIN
-  -- UsuarioRepository.findByCorreoPass
-  IF (
-    SELECT count(*) FROM usuario
-    WHERE correo_electronico = 'ana22533@cbtis75.edu.mx' AND contrasena = '0722'
-  ) <> 1 THEN
-    RAISE EXCEPTION 'BD-06 FALLA: login valido no encontrado';
+  -- UsuarioRepository.findByCorreo (la contrasena se valida con BCrypt en la API)
+  IF (SELECT count(*) FROM usuario WHERE correo_electronico = 'demo1@gestor.test') <> 1 THEN
+    RAISE EXCEPTION 'BD-06 FALLA: usuario demo1 no encontrado por correo';
   END IF;
-  IF (
-    SELECT count(*) FROM usuario
-    WHERE correo_electronico = 'ana22533@cbtis75.edu.mx' AND contrasena = 'incorrecta'
-  ) <> 0 THEN
-    RAISE EXCEPTION 'BD-06 FALLA: login con contrasena incorrecta devolvio filas';
+  IF (SELECT count(*) FROM usuario WHERE correo_electronico = 'noexiste@gestor.test') <> 0 THEN
+    RAISE EXCEPTION 'BD-06 FALLA: correo inexistente devolvio filas';
   END IF;
   -- TareasRepository.findByIdProyecto
   IF (SELECT count(*) FROM tareas WHERE id_proyecto = 197) <> 1 THEN
@@ -191,4 +185,16 @@ BEGIN
   DELETE FROM proyectos WHERE id_proyecto = nuevo_proyecto;
   DELETE FROM usuario WHERE id_usuario = nuevo_usuario;
   RAISE NOTICE 'BD-07 OK: las secuencias generan ids nuevos sin colisiones';
+END $$;
+
+-- BD-08 Ninguna contrasena esta en texto plano (todas son hash BCrypt)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM usuario
+    WHERE contrasena IS NOT NULL AND contrasena !~ '^\$2[aby]\$[0-9]{2}\$.{53}$'
+  ) THEN
+    RAISE EXCEPTION 'BD-08 FALLA: hay contrasenas sin cifrar';
+  END IF;
+  RAISE NOTICE 'BD-08 OK: todas las contrasenas estan cifradas con BCrypt';
 END $$;
