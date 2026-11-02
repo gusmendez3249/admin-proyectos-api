@@ -173,6 +173,8 @@ CREATE TABLE `usuario` (
 
 LOCK TABLES `usuario` WRITE;
 /*!40000 ALTER TABLE `usuario` DISABLE KEYS */;
+-- Usuarios demo anonimizados; contrasena de prueba Demo1234 cifrada con BCrypt (no son credenciales reales)
+-- nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash
 INSERT INTO `usuario` VALUES (131,'Usuario Demo Uno','demo1@gestor.test','$2a$10$qwavKxCFRv34KDWHHOeyue/QHqlNz5l/3WebtOibm65s8SVCxU9h.','Estudiante','#70FAB7'),(172,'Usuario Demo Dos','demo2@gestor.test','$2a$10$V3AuLgyTmjCwuMt68l.TAu50qRlvxw4Jcgkc8lj7XWAzws7MWpCV2','Estudiante','#54EA01'),(196,'Usuario Demo Tres','demo3@gestor.test','$2a$10$jZ7NclxXwgnykSAuvzquluUJfS1Wq.7XsWaLFeWtm4sPtO.g7kRPu','Estudiante','#805611');
 /*!40000 ALTER TABLE `usuario` ENABLE KEYS */;
 UNLOCK TABLES;
