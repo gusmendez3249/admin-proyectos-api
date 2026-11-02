@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,19 +11,23 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.mx.cbtis.gestor.dto.ComentarioPeticion;
 import com.mx.cbtis.gestor.modelo.Comentarios;
 import com.mx.cbtis.gestor.repository.ComentariosRepository;
 
 @RestController
 public class ComentariosController {
 	
-	@Autowired
-	ComentariosRepository comentariostable;
+	private final ComentariosRepository comentariostable;
+
+	public ComentariosController(ComentariosRepository comentariostable) {
+		this.comentariostable = comentariostable;
+	}
 	
 	@PostMapping("/getComentario")
 
-	public List<Comentarios> getComentario(@RequestBody Comentarios idComentario){
-		List<Comentarios> listaComentarios = comentariostable.findByTarea(idComentario.getId_tarea());
+	public List<Comentarios> getComentario(@RequestBody ComentarioPeticion idComentario){
+		List<Comentarios> listaComentarios = comentariostable.findByTarea(idComentario.idTarea());
 		return listaComentarios;
 	}
 	
@@ -41,11 +44,11 @@ public class ComentariosController {
 	}
 	
 	@PostMapping("/addComentario")
-	public int addComentario(@RequestBody Comentarios comentario) {
+	public int addComentario(@RequestBody ComentarioPeticion comentario) {
 		
 		int flag = 0;
 		if(comentario != null) {
-			comentariostable.save(comentario);
+			comentariostable.save(comentario.aEntidad());
 			flag = 1;
 		}
 		
@@ -53,11 +56,11 @@ public class ComentariosController {
 	}
 	
 	@PostMapping("/updateComentario")
-	public int updateComentario(@RequestBody Comentarios comentario) {
+	public int updateComentario(@RequestBody ComentarioPeticion comentario) {
 		
 		int flag = 0;
 		if(comentario != null) {
-			comentariostable.save(comentario);
+			comentariostable.save(comentario.aEntidad());
 			flag = 1;
 		}
 		
@@ -65,11 +68,11 @@ public class ComentariosController {
 	}
 	
 	@DeleteMapping("/deleteComentario")
-	public int deleteComentario(@RequestBody Comentarios comentario) {
+	public int deleteComentario(@RequestBody ComentarioPeticion comentario) {
 		
 		int flag = 0;
 		if(comentario != null) {
-			comentariostable.delete(comentario);
+			comentariostable.delete(comentario.aEntidad());
 			flag = 1;
 		}
 		

@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,26 +15,31 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.mx.cbtis.gestor.dto.LoginPeticion;
+import com.mx.cbtis.gestor.dto.UsuarioPeticion;
 import com.mx.cbtis.gestor.modelo.Usuario;
 import com.mx.cbtis.gestor.repository.UsuarioRepository;
 
 @RestController
 public class UsuarioController {
 
-	@Autowired
-	UsuarioRepository usuariotable;
+	private final UsuarioRepository usuariotable;
+
+	public UsuarioController(UsuarioRepository usuariotable) {
+		this.usuariotable = usuariotable;
+	}
 
 	/** Las contraseñas se guardan con BCrypt (nunca en texto plano). */
 	private final PasswordEncoder encoder = new BCryptPasswordEncoder();
 
 	@PostMapping("/getUsuarioLogin")
-	public Usuario getUsuarioLogin(@RequestBody Usuario userParam) {
+	public Usuario getUsuarioLogin(@RequestBody LoginPeticion userParam) {
 
-		Optional<Usuario> optionaluser = usuariotable.findByCorreo(userParam.getCorreo_electronico());
+		Optional<Usuario> optionaluser = usuariotable.findByCorreo(userParam.correoElectronico());
 
 		Usuario user = new Usuario();
 
-		if(optionaluser.isPresent() && contrasenaValida(userParam.getContrasena(), optionaluser.get())) {
+		if(optionaluser.isPresent() && contrasenaValida(userParam.contrasena(), optionaluser.get())) {
 			user = optionaluser.get();
 		}else {
 			user.setNombre("000");
@@ -58,11 +62,12 @@ public class UsuarioController {
 	}
 
 	@PostMapping("/addUsuario")
-	public int addUsuario(@RequestBody Usuario usuario) {
+	public int addUsuario(@RequestBody UsuarioPeticion usuario) {
 		int flag = 0;
 		if(usuario != null) {
-			prepararContrasena(usuario);
-			usuariotable.save(usuario);
+			Usuario entidad = usuario.aEntidad();
+			prepararContrasena(entidad);
+			usuariotable.save(entidad);
 			flag = 1;
 		}
 
@@ -70,11 +75,12 @@ public class UsuarioController {
 	}
 
 	@PostMapping("/updateUsuario")
-	public int updateUsuario(@RequestBody Usuario usuario) {
+	public int updateUsuario(@RequestBody UsuarioPeticion usuario) {
 		int flag = 0;
 		if(usuario != null) {
-			prepararContrasena(usuario);
-			usuariotable.save(usuario);
+			Usuario entidad = usuario.aEntidad();
+			prepararContrasena(entidad);
+			usuariotable.save(entidad);
 			flag = 1;
 		}
 
@@ -82,10 +88,10 @@ public class UsuarioController {
 	}
 
 	@DeleteMapping("/deleteUsuario")
-	public int deleteUsuario(@RequestBody Usuario usuario) {
+	public int deleteUsuario(@RequestBody UsuarioPeticion usuario) {
 		int flag = 0;
 		if(usuario != null) {
-			usuariotable.delete(usuario);
+			usuariotable.delete(usuario.aEntidad());
 			flag = 1;
 		}
 
