@@ -1,0 +1,65 @@
+# Stack de la aplicacion: PostgreSQL + API REST + interfaz web.
+# Uso (desde esta carpeta):
+#   cp .env.example .env        (y cambiar DB_PASSWORD)
+#   docker compose up -d --build
+# El front se construye desde su repositorio de GitHub; para usar una copia local
+# descomentar FRONT_CONTEXT en el archivo .env
+name: admin-proyectos
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dbgestor
+      POSTGRES_USER: ${DB_USERNAME:-gestor}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Esquema y datos demo; solo se ejecuta la primera vez (volumen vacio)
+      - ../dbgestor-postgres.sql:/docker-entrypoint-initdb.d/01-dbgestor.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d dbgestor"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sin puertos publicados: la BD solo es accesible dentro de la red de Docker
+
+  api:
+    build:
+      context: ..
+    image: admin-proyectos-api:${APP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/dbgestor
+      DB_USERNAME: ${DB_USERNAME:-gestor}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${API_PORT:-8081}:8081"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  front:
+    build:
+      context: ${FRONT_CONTEXT:-https://github.com/gusmendez3249/admin-proyectos-front.git#main}
+    image: admin-proyectos-front:${APP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      GESTOR_API_URL: http://api:8081
+    ports:
+      - "${FRONT_PORT:-8082}:8082"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+volumes:
+  db_data:

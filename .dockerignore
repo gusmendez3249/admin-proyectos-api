@@ -1,0 +1,15 @@
+target/
+.git/
+.mvn/
+.semgrep/
+.idea/
+.vscode/
+devops/
+deploy/
+database/
+*.sql
+*.ps1
+*.md
+.env
+.env.*
+Jenkinsfile
