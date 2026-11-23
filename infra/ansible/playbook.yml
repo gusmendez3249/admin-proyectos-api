@@ -1,0 +1,124 @@
+# Configuracion de la VM creada por Terraform y despliegue de la aplicacion.
+# Idempotente: se puede ejecutar varias veces; solo cambia lo necesario.
+# Ejecucion: ver ../README.md (se corre dentro de un contenedor, no requiere Ansible en Windows)
+- name: Configurar servidor y desplegar admin-proyectos
+  hosts: app
+  become: true
+  vars:
+    repo_api: https://github.com/gusmendez3249/admin-proyectos-api.git
+    rama: main
+    dir_app: /opt/admin-proyectos
+    # La contrasena de la BD llega por variable de entorno; nunca se escribe en el repositorio
+    db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+
+  pre_tasks:
+    - name: Validar que se definio la contrasena de la base de datos
+      ansible.builtin.assert:
+        that: db_password | length >= 12
+        fail_msg: "Define DB_PASSWORD (minimo 12 caracteres) antes de ejecutar el playbook"
+      no_log: true
+
+    - name: Esperar a que la VM acepte conexiones SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+  tasks:
+    # ---------- Sistema base ----------
+    - name: Instalar paquetes base
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, git, gnupg]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Crear archivo swap de 2 GB (holgura de memoria para las JVM)
+      ansible.builtin.command: >
+        bash -c "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
+      args:
+        creates: /swapfile
+
+    - name: Hacer persistente el swap
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "/swapfile none swap sw 0 0"
+
+    # ---------- Docker (repositorio oficial) ----------
+    - name: Crear carpeta de llaves de apt
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Descargar llave GPG de Docker
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Agregar repositorio de Docker
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable
+        filename: docker
+        state: present
+
+    - name: Instalar Docker Engine y el plugin compose
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+        state: present
+        update_cache: true
+
+    - name: Habilitar el servicio Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Permitir al usuario administrador usar Docker
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    # ---------- Aplicacion ----------
+    - name: Clonar o actualizar el repositorio de la API
+      ansible.builtin.git:
+        repo: "{{ repo_api }}"
+        dest: "{{ dir_app }}"
+        version: "{{ rama }}"
+        force: true
+      register: repo
+
+    - name: Generar archivo .env con permisos restringidos
+      ansible.builtin.copy:
+        dest: "{{ dir_app }}/deploy/.env"
+        mode: "0600"
+        content: |
+          DB_USERNAME=gestor
+          DB_PASSWORD={{ db_password }}
+          APP_VERSION={{ repo.after[:7] }}
+          API_PORT=8081
+          FRONT_PORT=8082
+      no_log: true
+
+    - name: Construir y levantar los contenedores
+      ansible.builtin.command: docker compose up -d --build --remove-orphans
+      args:
+        chdir: "{{ dir_app }}/deploy"
+      register: compose
+      changed_when: "'Started' in compose.stderr or 'Recreated' in compose.stderr or 'Built' in compose.stderr"
+
+    # ---------- Verificacion ----------
+    - name: Esperar a que el front responda saludable
+      ansible.builtin.uri:
+        url: http://localhost:8082/actuator/health
+        return_content: true
+      register: salud
+      until: salud.status == 200 and '"UP"' in salud.content
+      retries: 30
+      delay: 10
+
+    - name: Mostrar resultado
+      ansible.builtin.debug:
+        msg: "Desplegada la version {{ repo.after[:7] }}. Front: http://{{ inventory_hostname }}:8082"

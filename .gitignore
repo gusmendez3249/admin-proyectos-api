@@ -38,3 +38,12 @@ semgrep-report.*
 ### Variables de entorno con secretos ###
 .env
 !.env.example
+
+### Terraform / Ansible ###
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+infra/ansible/inventario.ini

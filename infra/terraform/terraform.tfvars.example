@@ -1,0 +1,5 @@
+# Copiar a terraform.tfvars (ignorado por git) y completar.
+subscription_id = "00000000-0000-0000-0000-000000000000"
+# ubicacion     = "northcentralus"
+# tamano_vm     = "Standard_B2als_v2"
+# ip_admin      = ""   # vacio = se detecta la IP publica actual
