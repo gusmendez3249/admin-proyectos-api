@@ -8,19 +8,42 @@
     repo_api: https://github.com/gusmendez3249/admin-proyectos-api.git
     rama: main
     dir_app: /opt/admin-proyectos
-    # La contrasena de la BD llega por variable de entorno; nunca se escribe en el repositorio
-    db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+    # Secretos: nunca se escriben en el repositorio. Prioridad:
+    #   1) los que ya existen en el .env de la VM (PostgreSQL y Grafana solo aceptan la
+    #      contrasena con la que se inicializaron, asi que se conservan entre despliegues)
+    #   2) variables de entorno DB_PASSWORD / GRAFANA_ADMIN_PASSWORD
+    #   3) una contrasena aleatoria de 24 caracteres generada en la primera instalacion
+    pw_aleatoria: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=24) }}"
 
   pre_tasks:
-    - name: Validar que se definio la contrasena de la base de datos
-      ansible.builtin.assert:
-        that: db_password | length >= 12
-        fail_msg: "Define DB_PASSWORD (minimo 12 caracteres) antes de ejecutar el playbook"
-      no_log: true
-
     - name: Esperar a que la VM acepte conexiones SSH
       ansible.builtin.wait_for_connection:
         timeout: 300
+
+    - name: Leer el .env existente (si ya hubo un despliegue)
+      ansible.builtin.slurp:
+        src: "{{ dir_app }}/deploy/.env"
+      register: env_actual
+      failed_when: false
+      no_log: true
+
+    - name: Resolver contrasenas (conservar las existentes)
+      ansible.builtin.set_fact:
+        db_password: >-
+          {{ (env_actual.content | default('') | b64decode | regex_search('(?m)^DB_PASSWORD=(.+)$', '\1') | default([], true) | first)
+             | default(lookup('env', 'DB_PASSWORD'), true) | default(pw_aleatoria, true) }}
+        grafana_password: >-
+          {{ (env_actual.content | default('') | b64decode | regex_search('(?m)^GRAFANA_ADMIN_PASSWORD=(.+)$', '\1') | default([], true) | first)
+             | default(lookup('env', 'GRAFANA_ADMIN_PASSWORD'), true) | default(lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=24), true) }}
+      no_log: true
+
+    - name: Validar longitud minima de las contrasenas
+      ansible.builtin.assert:
+        that:
+          - db_password | length >= 12
+          - grafana_password | length >= 12
+        fail_msg: "Las contrasenas deben tener al menos 12 caracteres"
+      no_log: true
 
   tasks:
     # ---------- Sistema base ----------
@@ -97,9 +120,12 @@
         content: |
           DB_USERNAME=gestor
           DB_PASSWORD={{ db_password }}
+          GRAFANA_ADMIN_PASSWORD={{ grafana_password }}
           APP_VERSION={{ repo.after[:7] }}
           API_PORT=8081
           FRONT_PORT=8082
+          COMPOSE_PATH_SEPARATOR=:
+          COMPOSE_FILE=docker-compose.yml:docker-compose.monitoreo.yml
       no_log: true
 
     - name: Construir y levantar los contenedores
@@ -119,6 +145,30 @@
       retries: 30
       delay: 10
 
+    - name: Esperar a que Grafana y Prometheus respondan
+      ansible.builtin.uri:
+        url: "{{ item }}"
+      register: monitoreo
+      until: monitoreo.status == 200
+      retries: 18
+      delay: 10
+      loop:
+        - http://localhost:3000/api/health
+        - http://localhost:9090/-/ready
+
+    - name: Verificar que Prometheus lee todos los objetivos
+      ansible.builtin.uri:
+        url: http://localhost:9090/api/v1/targets?state=active
+        return_content: true
+      register: objetivos
+      until: objetivos.json.data.activeTargets | selectattr('health', 'equalto', 'up') | list | length == objetivos.json.data.activeTargets | length
+      retries: 12
+      delay: 10
+
     - name: Mostrar resultado
       ansible.builtin.debug:
-        msg: "Desplegada la version {{ repo.after[:7] }}. Front: http://{{ inventory_hostname }}:8082"
+        msg: >-
+          Desplegada la version {{ repo.after[:7] }}.
+          Front: http://{{ inventory_hostname }}:8082 |
+          Grafana: http://{{ inventory_hostname }}:3000 |
+          Objetivos de Prometheus activos: {{ objetivos.json.data.activeTargets | length }}

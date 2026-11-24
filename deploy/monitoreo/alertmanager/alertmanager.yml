@@ -1,0 +1,18 @@
+# Enrutamiento de alertas. El receptor por defecto solo registra las alertas (visibles en
+# Grafana > Alerting y en la API de Alertmanager). Para notificar por correo, Slack o Teams
+# se agrega un receptor aqui con sus credenciales tomadas de variables de entorno, nunca del repo.
+route:
+  receiver: registro
+  group_by: [alertname, job]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: registro
+
+inhibit_rules:
+  # Si el servicio esta caido, no se notifican tambien sus alertas de latencia o errores
+  - source_matchers: [alertname="ServicioCaido"]
+    target_matchers: [alertname=~"LatenciaP95Alta|TasaErrores5xxAlta"]
+    equal: [job]
