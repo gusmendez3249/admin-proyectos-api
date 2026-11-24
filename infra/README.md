@@ -3,7 +3,7 @@
 | Herramienta | Alcance | Por qué |
 |---|---|---|
 | **Terraform** (`terraform/`) | *Aprovisionamiento*: grupo de recursos, VNet, subred, NSG (firewall), IP pública estática con DNS y VM Ubuntu 24.04 (`Standard_B2als_v2`, 2 vCPU / 4 GB) | Declarativo, con estado y plan previo (`terraform plan`): crea, modifica o destruye recursos de forma reproducible |
-| **Ansible** (`ansible/`) | *Configuración y despliegue*: paquetes base, swap, Docker Engine + Compose, clonado del repo, `.env` con permisos 600, `docker compose up` y verificación de salud | Idempotente y sin agente (solo SSH); describe el estado del servidor, no solo comandos sueltos |
+| **Ansible** (`ansible/`) | *Configuración y despliegue*: paquetes base, swap, Docker Engine + Compose, configuración del demonio (`daemon.json` con handler de reinicio), clonado del repo, `.env` con permisos 600, `docker compose up` (app + monitoreo) y verificación de salud de front, Grafana, Prometheus y sus objetivos | Idempotente y sin agente (solo SSH); describe el estado del servidor, no solo comandos sueltos |
 | **Docker Compose** (`../deploy/`) | Ejecución de PostgreSQL, API y front | El mismo stack se prueba en local y se despliega en la nube |
 
 Terraform genera `ansible/inventario.ini` con la IP real de la VM, así que las dos herramientas quedan encadenadas.
@@ -11,7 +11,7 @@ Terraform genera `ansible/inventario.ini` con la IP real de la VM, así que las 
 ## Seguridad
 - Acceso a la VM **solo con llave SSH** (contraseñas deshabilitadas); la llave privada nunca sale del equipo local.
 - NSG: puertos 22, 8081 y 9090 solo desde la IP del administrador (se detecta sola); 8082 (front) y 3000 (Grafana) públicos; todo lo demás bloqueado. PostgreSQL no publica puerto.
-- Sin secretos en el repo: `terraform.tfvars`, `*.tfstate`, `.env` e `inventario.ini` están en `.gitignore`. La contraseña de la BD se pide al ejecutar Ansible y se guarda en la VM con permisos `0600`.
+- Sin secretos en el repo: `terraform.tfvars`, `*.tfstate`, `.env` e `inventario.ini` están en `.gitignore`. Las contraseñas de PostgreSQL y Grafana las genera Ansible (aleatorias, 24 caracteres) en la primera instalación, se conservan en los despliegues siguientes y se guardan solo en la VM con permisos `0600`. Para verlas: `ssh ... "sudo cat /opt/admin-proyectos/deploy/.env"`.
 - Terraform se autentica con la sesión de Azure CLI (`az login`), no con llaves en archivos.
 
 ## Reproducir desde cero (Windows / PowerShell)

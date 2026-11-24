@@ -1,0 +1,48 @@
+# Evidencia de infraestructura - generada 2026-11-24T04:05:54Z
+
+## terraform version
+Terraform v1.17.2
+
+## terraform state list
+data.http.mi_ip[0]
+azurerm_linux_virtual_machine.vm
+azurerm_network_interface.nic
+azurerm_network_security_group.nsg
+azurerm_public_ip.pip
+azurerm_resource_group.rg
+azurerm_subnet.app
+azurerm_subnet_network_security_group_association.app
+azurerm_virtual_network.vnet
+local_file.inventario_ansible
+
+## terraform output
+dns = "gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com"
+ip_publica = "20.221.204.187"
+ssh = "ssh -i ~/.ssh/admin_proyectos_azure azureuser@20.221.204.187"
+url_front = "http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8082"
+url_grafana = "http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:3000"
+
+## terraform plan (deriva respecto al codigo)
+No changes. Your infrastructure matches the configuration.
+and found no differences, so no changes are needed.
+
+## az resource list -g rg-gusmendez-devops
+Recurso                  Tipo                                     Region
+-----------------------  ---------------------------------------  --------------
+nsg-gusmendez-devops     Microsoft.Network/networkSecurityGroups  northcentralus
+pip-gusmendez-devops     Microsoft.Network/publicIPAddresses      northcentralus
+vnet-gusmendez-devops    Microsoft.Network/virtualNetworks        northcentralus
+nic-gusmendez-devops     Microsoft.Network/networkInterfaces      northcentralus
+vm-gusmendez-devops      Microsoft.Compute/virtualMachines        northcentralus
+osdisk-gusmendez-devops  Microsoft.Compute/disks                  northcentralus
+
+## Reglas del NSG (IP de administrador omitida)
+Regla          Prioridad    Acceso    Puertos       Origen
+-------------  -----------  --------  ------------  ----------------
+admin-ssh-api  100          Allow     22,8081,9090  <IP-admin>/32
+web-publico    110          Allow     8082,3000     Internet
+
+## VM
+Vm                   Tamano             So                Estado      Auth_password
+-------------------  -----------------  ----------------  ----------  ---------------
+vm-gusmendez-devops  Standard_B2als_v2  ubuntu-24_04-lts  VM running  True

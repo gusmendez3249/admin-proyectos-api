@@ -1,0 +1,255 @@
+{
+    "metrics": {
+        "checks": {
+            "passes": 7506,
+            "fails": 5004,
+            "thresholds": {
+                "rate>0.99": true
+            },
+            "value": 0.6
+        },
+        "http_req_failed": {
+            "passes": 2502,
+            "fails": 7506,
+            "thresholds": {
+                "rate<0.01": true
+            },
+            "value": 0.25
+        },
+        "login_fallido": {
+            "passes": 2502,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.01": true
+            },
+            "value": 1
+        },
+        "vus": {
+            "value": 2,
+            "min": 0,
+            "max": 50
+        },
+        "http_req_blocked": {
+            "med": 0.009308,
+            "p(90)": 65.24008370000001,
+            "p(95)": 69.77314295,
+            "p(99)": 81.03909725000004,
+            "max": 11365.596333,
+            "avg": 18.88605710921264,
+            "min": 0.003117
+        },
+        "iteration_duration": {
+            "p(99)": 6508.351680889999,
+            "max": 16954.273222,
+            "avg": 5484.098587509987,
+            "min": 4408.957367,
+            "med": 5498.453603,
+            "p(90)": 6270.6883598,
+            "p(95)": 6370.013934899999
+        },
+        "vus_max": {
+            "min": 50,
+            "max": 50,
+            "value": 50
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "max": 0
+        },
+        "data_received": {
+            "count": 12919701,
+            "rate": 23762.671498028398
+        },
+        "http_req_duration{endpoint:consultarProyectos}": {
+            "p(90)": 81.41184150000001,
+            "p(95)": 85.91358195,
+            "p(99)": 107.89806055999968,
+            "max": 470.736046,
+            "avg": 73.23430713269408,
+            "min": 57.560779,
+            "med": 69.410361,
+            "thresholds": {
+                "p(95)<800": false
+            }
+        },
+        "http_req_connecting": {
+            "min": 0,
+            "med": 0,
+            "p(90)": 64.97478760000001,
+            "p(95)": 69.4454985,
+            "p(99)": 80.13013893000002,
+            "max": 11365.410119,
+            "avg": 18.801939676358888
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 72.386593186917,
+            "min": 55.159335,
+            "med": 68.187691,
+            "p(90)": 79.8624415,
+            "p(95)": 85.09047925,
+            "p(99)": 155.52652129999913,
+            "max": 485.57338
+        },
+        "http_req_sending": {
+            "p(95)": 0.23873839999999993,
+            "p(99)": 0.41094997000000044,
+            "max": 13.22421,
+            "avg": 0.11508515797362136,
+            "min": 0.01022,
+            "med": 0.09085850000000001,
+            "p(90)": 0.18943840000000012
+        },
+        "http_req_waiting": {
+            "avg": 97.30232608902885,
+            "min": 54.934246,
+            "med": 70.5537215,
+            "p(90)": 171.42564010000007,
+            "p(95)": 191.94936209999997,
+            "p(99)": 282.95653249000026,
+            "max": 653.139264
+        },
+        "http_reqs": {
+            "rate": 18.407300320051384,
+            "count": 10008
+        },
+        "duracion_flujo_completo": {
+            "min": 3386,
+            "med": 3448,
+            "p(90)": 3538,
+            "p(95)": 3599,
+            "p(99)": 3854.9699999999993,
+            "max": 14730,
+            "avg": 3476.771782573941
+        },
+        "iterations": {
+            "count": 2502,
+            "rate": 4.601825080012846
+        },
+        "http_req_receiving": {
+            "med": 0.23394500000000001,
+            "p(90)": 0.5872651000000005,
+            "p(95)": 1.0549539499999994,
+            "p(99)": 5.204864970000001,
+            "max": 417.598346,
+            "avg": 1.834837913069542,
+            "min": 0.032144
+        },
+        "group_duration": {
+            "med": 122.76317,
+            "p(90)": 175.01958729999998,
+            "p(95)": 199.75424529999998,
+            "p(99)": 333.5648911500002,
+            "max": 11430.777994,
+            "avg": 118.60899272432067,
+            "min": 55.39238
+        },
+        "http_req_duration{endpoint:verificarLogin}": {
+            "p(95)": 267.60168695,
+            "p(99)": 391.18622855999905,
+            "max": 653.583415,
+            "avg": 179.84921707953646,
+            "min": 132.49253,
+            "med": 166.16369400000002,
+            "p(90)": 227.93486910000004,
+            "thresholds": {
+                "p(95)<1500": false
+            }
+        },
+        "data_sent": {
+            "count": 1934046,
+            "rate": 3557.21078684993
+        },
+        "http_req_duration": {
+            "max": 653.583415,
+            "avg": 99.25224916007137,
+            "min": 55.159335,
+            "med": 71.14356599999999,
+            "p(90)": 173.01440390000002,
+            "p(95)": 195.81089645,
+            "p(99)": 320.22885952000007,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        }
+    },
+    "root_group": {
+        "checks": {},
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+                "01 abrir login": {
+                    "checks": {
+                        "login 200": {
+                            "name": "login 200",
+                            "path": "::01 abrir login::login 200",
+                            "id": "34e33c85ca37d202fccdf2bd77b675cf",
+                            "passes": 2502,
+                            "fails": 0
+                        }
+                    },
+                    "name": "01 abrir login",
+                    "path": "::01 abrir login",
+                    "id": "6d0140dfad84cd410317c2c63ac4db5c",
+                    "groups": {}
+                },
+                "02 iniciar sesion": {
+                    "name": "02 iniciar sesion",
+                    "path": "::02 iniciar sesion",
+                    "id": "89a08d2d3a6adc020f686e43b5afa33b",
+                    "groups": {},
+                    "checks": {
+                            "verificarLogin 200": {
+                                "path": "::02 iniciar sesion::verificarLogin 200",
+                                "id": "e0c056558f80162c98dc42ada3386b77",
+                                "passes": 0,
+                                "fails": 2502,
+                                "name": "verificarLogin 200"
+                            },
+                            "credenciales aceptadas": {
+                                "id": "842bc418db900baa0a007d23b2f0d6fe",
+                                "passes": 0,
+                                "fails": 2502,
+                                "name": "credenciales aceptadas",
+                                "path": "::02 iniciar sesion::credenciales aceptadas"
+                            }
+                        }
+                },
+                "03 listar proyectos": {
+                    "name": "03 listar proyectos",
+                    "path": "::03 listar proyectos",
+                    "id": "ce973d6c955717f92fc3c019782b761f",
+                    "groups": {},
+                    "checks": {
+                            "consultarProyectos 200": {
+                                "id": "f601bd3d5debe64b37f658c942335a6a",
+                                "passes": 2502,
+                                "fails": 0,
+                                "name": "consultarProyectos 200",
+                                "path": "::03 listar proyectos::consultarProyectos 200"
+                            }
+                        }
+                },
+                "04 ver tareas del proyecto": {
+                    "id": "cf6d72f70eae91ebf618524f1ea10441",
+                    "groups": {},
+                    "checks": {
+                            "obtenerTareas 200": {
+                                "passes": 2502,
+                                "fails": 0,
+                                "name": "obtenerTareas 200",
+                                "path": "::04 ver tareas del proyecto::obtenerTareas 200",
+                                "id": "5ab6d687c27cec2ad415365ca511a47e"
+                            }
+                        },
+                    "name": "04 ver tareas del proyecto",
+                    "path": "::04 ver tareas del proyecto"
+                }
+            }
+    }
+}

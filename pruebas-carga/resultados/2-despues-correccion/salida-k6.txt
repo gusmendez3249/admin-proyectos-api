@@ -1,0 +1,42 @@
+
+     █ 01 abrir login
+
+       ✓ login 200
+
+     █ 02 iniciar sesion
+
+       ✓ verificarLogin 200
+       ✓ credenciales aceptadas
+
+     █ 03 listar proyectos
+
+       ✓ consultarProyectos 200
+
+     █ 04 ver tareas del proyecto
+
+       ✓ obtenerTareas 200
+
+   ✓ checks..............................: 100.00% ✓ 12660     ✗ 0    
+     data_received.......................: 13 MB   24 kB/s
+     data_sent...........................: 2.0 MB  3.6 kB/s
+     duracion_flujo_completo.............: avg=3.39s    min=3.3s     med=3.37s    p(90)=3.44s    p(95)=3.49s    p(99)=3.73s    max=4.48s   
+     group_duration......................: avg=97.8ms   min=55.99ms  med=69.99ms  p(90)=168.27ms p(95)=190.34ms p(99)=302.42ms max=1.14s   
+     http_req_blocked....................: avg=886.63µs min=2.1µs    med=6.43µs   p(90)=9.72µs   p(95)=12.39µs  p(99)=59.17ms  max=1.07s   
+     http_req_connecting.................: avg=867.86µs min=0s       med=0s       p(90)=0s       p(95)=0s       p(99)=59.03ms  max=1.07s   
+   ✓ http_req_duration...................: avg=96.58ms  min=27.28ms  med=69.42ms  p(90)=167.84ms p(95)=189.98ms p(99)=301.71ms max=580.5ms 
+     ✓ { endpoint:consultarProyectos }...: avg=71.04ms  min=32.46ms  med=68.03ms  p(90)=77.9ms   p(95)=81.97ms  p(99)=120.11ms max=462.61ms
+     ✓ { endpoint:verificarLogin }.......: avg=177.15ms min=107.18ms med=162.32ms p(90)=218.73ms p(95)=260.73ms p(99)=447.91ms max=580.5ms 
+       { expected_response:true }........: avg=96.58ms  min=27.28ms  med=69.42ms  p(90)=167.84ms p(95)=189.98ms p(99)=301.71ms max=580.5ms 
+   ✓ http_req_failed.....................: 0.00%   ✓ 0         ✗ 10128
+     http_req_receiving..................: avg=1.11ms   min=19µs     med=156.84µs p(90)=356.34µs p(95)=838.37µs p(99)=4.06ms   max=401.21ms
+     http_req_sending....................: avg=70.29µs  min=8.16µs   med=65µs     p(90)=108.62µs p(95)=125.5µs  p(99)=191.53µs max=986.52µs
+     http_req_tls_handshaking............: avg=0s       min=0s       med=0s       p(90)=0s       p(95)=0s       p(99)=0s       max=0s      
+     http_req_waiting....................: avg=95.4ms   min=27.13ms  med=69.02ms  p(90)=166.78ms p(95)=187.91ms p(99)=279.15ms max=559.96ms
+     http_reqs...........................: 10128   18.742207/s
+     iteration_duration..................: avg=5.4s     min=4.35s    med=5.4s     p(90)=6.2s     p(95)=6.3s     p(99)=6.39s    max=6.78s   
+     iterations..........................: 2532    4.685552/s
+   ✓ login_fallido.......................: 0.00%   ✓ 0         ✗ 2532 
+     vus.................................: 2       min=0       max=50 
+     vus_max.............................: 50      min=50      max=50 
+
+exit k6: 0

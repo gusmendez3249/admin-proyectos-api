@@ -1,0 +1,40 @@
+== 2026-11-24T03:54:04Z Estado inicial
+api: Up About a minute (healthy)
+   Prometheus  : sin alertas
+   Alertmanager: sin alertas
+== 2026-11-24T03:54:05Z Se detiene el contenedor api (falla simulada)
+ Container admin-proyectos-api-1 Stopped 
+   peticion al front durante la caida -> HTTP 503
+   peticion al front durante la caida -> HTTP 503
+   peticion al front durante la caida -> HTTP 503
+== 2026-11-24T03:54:41Z +30s
+   Prometheus  : [('ServicioCaido', 'api', 'pending')]
+== 2026-11-24T03:55:11Z +60s
+   Prometheus  : [('ServicioCaido', 'api', 'pending')]
+== 2026-11-24T03:55:41Z +90s
+   Prometheus  : [('ServicioCaido', 'api', 'firing')]
+== 2026-11-24T03:56:11Z +120s
+   Prometheus  : [('ServicioCaido', 'api', 'firing')]
+== 2026-11-24T03:56:31Z Notificacion recibida
+   Alertmanager: [('ServicioCaido', 'api', 'active', 'desde 2026-11-24T03:55:25')]
+== 2026-11-24T03:56:31Z Se levanta la api (recuperacion)
+ Container admin-proyectos-api-1 Started 
+== 2026-11-24T03:57:02Z +30s
+   Prometheus  : [('ServicioCaido', 'api', 'firing')]
+== 2026-11-24T03:57:32Z +60s
+   Prometheus  : sin alertas
+== 2026-11-24T03:58:02Z +90s
+   Prometheus  : sin alertas
+== 2026-11-24T03:58:32Z Estado final
+   Prometheus  : sin alertas
+   Alertmanager: sin alertas
+   front tras la recuperacion -> HTTP 200
+
+== 2026-11-24T04:02:49Z Verificacion de logs tras la correccion (commit 36cc74b del front): caida corta de la api
+ Container admin-proyectos-api-1 Stopped 
+   front -> HTTP 503
+   front -> HTTP 503
+ Container admin-proyectos-api-1 Started 
+== Logs WARN/ERROR del front en Loki (ultimos 2 min)
+   2026-11-24T04:02:56.262Z  WARN 1 --- [Ejercicio5Cliente] [nio-8082-exec-7] c.mx.cbtis.controller.GestorController   : Backend no disponible, se responde 503: I/O error on POST request for "http://api:8081/buscarProyectos": api
+   2026-11-24T04:02:56.232Z  WARN 1 --- [Ejercicio5Cliente] [nio-8082-exec-5] c.mx.cbtis.controller.GestorController   : Backend no disponible, se responde 503: I/O error on POST request for "http://api:8081/buscarProyectos": api

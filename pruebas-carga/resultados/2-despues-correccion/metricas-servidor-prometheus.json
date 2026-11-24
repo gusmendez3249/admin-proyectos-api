@@ -1,0 +1,62 @@
+{
+ "ventana": {
+  "inicio": "2026-11-24T03:37:12Z",
+  "fin": "2026-11-24T03:46:15Z"
+ },
+ "resultados": {
+  "cpu_vm_max_pct": {
+   "valor": 53.0667,
+   "_consulta": "max_over_time((100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))))[9m:15s])"
+  },
+  "cpu_vm_prom_pct": {
+   "valor": 29.4415,
+   "_consulta": "avg_over_time((100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))))[9m:15s])"
+  },
+  "ram_vm_max_pct": {
+   "node": 33.9658,
+   "_consulta": "max_over_time((100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))[9m:15s])"
+  },
+  "swap_usada_max_mb": {
+   "node": 80.5703,
+   "_consulta": "max_over_time(((node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes)/1048576)[9m:15s])"
+  },
+  "p95_servidor_front_s": {
+   "valor": 0.1221,
+   "_consulta": "histogram_quantile(0.95, sum by (le) (increase(http_server_requests_seconds_bucket{job=\"front\",uri!~\"/actuator.*\"}[9m])))"
+  },
+  "p95_servidor_api_s": {
+   "valor": 0.1284,
+   "_consulta": "histogram_quantile(0.95, sum by (le) (increase(http_server_requests_seconds_bucket{job=\"api\",uri!~\"/actuator.*\"}[9m])))"
+  },
+  "p95_servidor_api_login_s": {
+   "valor": 0.1878,
+   "_consulta": "histogram_quantile(0.95, sum by (le) (increase(http_server_requests_seconds_bucket{job=\"api\",uri=\"/getUsuarioLogin\"}[9m])))"
+  },
+  "peticiones_front": {
+   "valor": 10338.1446,
+   "_consulta": "sum(increase(http_server_requests_seconds_count{job=\"front\",uri!~\"/actuator.*\"}[9m]))"
+  },
+  "peticiones_api": {
+   "valor": 7807.8857,
+   "_consulta": "sum(increase(http_server_requests_seconds_count{job=\"api\",uri!~\"/actuator.*\"}[9m]))"
+  },
+  "errores_5xx": {
+   "valor": 0.0,
+   "_consulta": "sum(increase(http_server_requests_seconds_count{status=~\"5..\"}[9m])) or vector(0)"
+  },
+  "heap_max_mb_por_servicio": {
+   "api": 50.3533,
+   "front": 33.4818,
+   "_consulta": "max by (job) (max_over_time(sum by (job) (jvm_memory_used_bytes{area=\"heap\"})[9m:15s])) / 1048576"
+  },
+  "mem_contenedor_max_mb": {
+   "_consulta": "max by (container_label_com_docker_compose_service) (max_over_time(container_memory_working_set_bytes{container_label_com_docker_compose_service=~\"api|front|db\"}[9m])) / 1048576"
+  },
+  "cpu_contenedor_max_nucleos": {
+   "_consulta": "max by (container_label_com_docker_compose_service) (max_over_time(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"api|front|db\"}[1m])[9m:15s]))"
+  },
+  "hilos_tomcat_max": {
+   "_consulta": "max by (job) (max_over_time(tomcat_threads_busy_threads[9m]))"
+  }
+ }
+}
