@@ -12,7 +12,7 @@
     "to": "now"
   },
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "panels": [
     {
@@ -49,7 +49,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"api\"}",
+          "expr": "max(up{job=\"api\"})",
           "legendFormat": ""
         }
       ],
@@ -117,7 +117,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"front\"}",
+          "expr": "max(up{job=\"front\"})",
           "legendFormat": ""
         }
       ],
@@ -185,7 +185,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg_over_time(up{job=\"front\"}[24h])",
+          "expr": "avg_over_time(max(up{job=\"front\"})[24h:1m])",
           "legendFormat": ""
         }
       ],
@@ -264,7 +264,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"front\",uri!~\"/actuator.*\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"front\",uri!~\"/actuator.*|/[*][*]\"}[5m])))",
           "legendFormat": ""
         }
       ],
@@ -298,7 +298,8 @@
             "lastNotNull"
           ]
         }
-      }
+      },
+      "description": "Excluye /actuator y los recursos estaticos (/**)"
     },
     {
       "id": 7,
@@ -411,7 +412,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/[*][*]\"}[1m])))",
           "legendFormat": "{{job}} p50"
         },
         {
@@ -420,7 +421,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/[*][*]\"}[1m])))",
           "legendFormat": "{{job}} p95"
         },
         {
@@ -429,7 +430,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/[*][*]\"}[1m])))",
           "legendFormat": "{{job}} p99"
         }
       ],
@@ -439,7 +440,8 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {},
+      "description": "Excluye /actuator y los recursos estaticos (/**)"
     },
     {
       "id": 10,
@@ -472,7 +474,8 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {},
+      "description": "Incluye recursos estaticos (/**) para comparar"
     },
     {
       "id": 11,

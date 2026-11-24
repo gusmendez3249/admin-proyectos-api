@@ -178,6 +178,30 @@
         chdir: "{{ dir_app }}/deploy"
       when: repo.changed
 
+    - name: Reiniciar cAdvisor si se recrearon contenedores
+      # cAdvisor no detecta los contenedores que Docker recrea despues de que el arranco
+      # (Docker 29 + factoria de containerd): sin esto, los paneles por contenedor quedan vacios (bitacora #19)
+      ansible.builtin.command: docker compose restart cadvisor
+      args:
+        chdir: "{{ dir_app }}/deploy"
+      when: compose.changed
+
+    # ---------- Limpieza de disco (bitacora #19) ----------
+    - name: Eliminar imagenes de versiones anteriores de la aplicacion
+      # Cada despliegue etiqueta las imagenes con el commit; se conserva solo la version actual
+      ansible.builtin.shell: >-
+        docker images --format '{{ '{{' }}.Repository{{ '}}' }}:{{ '{{' }}.Tag{{ '}}' }}'
+        | grep -E '^admin-proyectos-(api|front):'
+        | grep -v ':{{ repo.after[:7] }}$'
+        | xargs -r docker rmi
+      register: imagenes_viejas
+      changed_when: imagenes_viejas.stdout | length > 0
+
+    - name: Eliminar imagenes huerfanas y cache de compilacion de mas de 3 dias
+      ansible.builtin.shell: docker image prune -f && docker builder prune -af --filter until=72h
+      register: limpieza
+      changed_when: "'Total reclaimed space: 0B' not in limpieza.stdout"
+
     # ---------- Verificacion ----------
     - name: Esperar a que el front responda saludable
       # Actuator esta en un puerto interno: se usa el HEALTHCHECK de Docker (que consulta /actuator/health)
