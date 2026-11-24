@@ -21,9 +21,14 @@ groups:
           resumen: "{{ $labels.job }}: mas del 5% de respuestas 5xx"
           descripcion: "Tasa de error actual: {{ $value | humanizePercentage }}."
 
+      # Se excluyen los recursos estaticos (uri "/**": imagenes y videos pesados) y se exige un
+      # trafico minimo: con pocas peticiones, un par de descargas lentas disparaban un falso
+      # positivo (bitacora #18).
       - alert: LatenciaP95Alta
         expr: |
-          histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*"}[5m]))) > 1
+          histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*|/[*][*]"}[5m]))) > 1
+          and on (job)
+          sum by (job) (rate(http_server_requests_seconds_count{uri!~"/actuator.*|/[*][*]"}[5m])) > 0.1
         for: 3m
         labels: { severidad: media }
         annotations:
