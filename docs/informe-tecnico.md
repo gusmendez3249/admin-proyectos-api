@@ -180,7 +180,7 @@ Ejecutados en Jenkins durante las Unidades II–III (evidencias originales en el
 | 03:56:31 | API levantada |
 | 03:57:32 | Alerta **resuelta** automáticamente; Alertmanager sin alertas; front HTTP 200 |
 
-Además, los 503 de la caída dispararon de forma natural `TasaErrores5xxAlta` (> 5 % de respuestas 5xx en 5 min). La prueba reveló que el front no registraba la falla en sus logs (bitácora #13), lo que se corrigió y verificó en Loki.
+La prueba se repitió el 24/11 durante la toma de capturas (`A-07`: *firing*; `A-07b`: resuelta). Además, los 503 de la caída dispararon de forma natural `TasaErrores5xxAlta` (> 5 % de respuestas 5xx en 5 min). La prueba reveló que el front no registraba la falla en sus logs (bitácora #13), lo que se corrigió y verificó en Loki.
 
 **Trazas:** no se implementaron trazas distribuidas (ver §9).
 
@@ -200,7 +200,7 @@ Detalle completo en **[pruebas-carga/README.md](../pruebas-carga/README.md)**. E
 
 ## 8. Bitácora de incidencias
 
-Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (17 incidencias). Las más relevantes:
+Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (19 incidencias). Las más relevantes:
 
 | # | Incidencia | Corrección |
 |---|---|---|
@@ -209,6 +209,8 @@ Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejec
 | 13 | El front respondía 503 sin dejar rastro en los logs | `log.warn` en el manejador; verificado en Loki |
 | 14 | Semgrep: `/actuator/prometheus` accesible desde Internet | Actuator en puerto interno 9081/9082; ahora HTTP 404 desde fuera |
 | 16 | La red bloquea SSH (22): riesgo para la demo en vivo | SSH alternativo en 443 gestionado por Terraform + Ansible |
+| 18 | Falso positivo de `LatenciaP95Alta` con poco tráfico (recursos estáticos) | La regla excluye `/**` y exige ≥ 0.1 req/s |
+| 19 | Disco al 80 % (imágenes viejas + 12 GB huérfanos de containerd) y cAdvisor ciego tras cada despliegue | Limpieza automática en Ansible, reinicio de cAdvisor; disco 80 % → 44 % |
 | 7 | Riesgo de romper la conexión a la BD al regenerar contraseñas | El playbook conserva los secretos existentes |
 | 6 | SSH bloqueado por IP dinámica | `terraform apply` re-detecta la IP (solo cambia la regla) |
 | 4 | Suscripción compartida con recursos ajenos | Grupo y prefijo propios; revisión de `plan` |
@@ -250,17 +252,17 @@ Etapa de despliegue en Jenkins con credencial SSH, backend remoto de Terraform, 
 
 ## 11. Anexos — capturas identificadas
 
-Las capturas se agregan en el portafolio con este identificador:
+Capturas tomadas el 24/11/2026 sobre el entorno real; se incluyen en el **Anexo D** de este documento y en el portafolio (`evidencia-unidad3/capturas/`).
 
-| ID | Captura | Dónde obtenerla |
+| ID | Captura | Criterio |
 |---|---|---|
-| A-01 | Grupo de recursos `rg-gusmendez-devops` con sus 6 recursos | Portal de Azure |
-| A-02 | Salida de `terraform plan` / `apply` | Terminal |
-| A-03 | `PLAY RECAP` de Ansible | Terminal |
-| A-04 | Aplicación funcionando: login e inicio con proyectos | `http://<dns>:8082` |
-| A-05 | Tablero de Grafana completo (durante la prueba de carga, 03:37–03:46 UTC del 24/11) | `http://<dns>:3000` |
-| A-06 | Panel de logs de Grafana con el WARN del front | Grafana → panel *Logs* |
-| A-07 | Alerta `ServicioCaido` en estado *firing* | Grafana → Alerting, o Prometheus `/alerts` |
-| A-08 | Reporte HTML de k6 (ejecución 2) | `pruebas-carga/resultados/2-despues-correccion/reporte-k6.html` |
-| A-09 | Prometheus → Status → Targets (5/5 *up*) | `http://<IP>:9090/targets` (solo IP del administrador) |
-| A-10 | Pipelines de Jenkins con SUCCESS, Quality Gate de SonarQube y reporte JaCoCo | Portafolio Unidad II/III |
+| A-01 | Portal de Azure: grupo `rg-gusmendez-devops` con sus 6 recursos | Despliegue cloud / IaC |
+| A-02 | `terraform plan` → *No changes* (sin deriva) | IaC |
+| A-03 | Ansible por SSH 443: `PLAY RECAP ok=25 changed=4 failed=0` | IaC |
+| A-04 / A-04b / A-04c | Login de la app, "Mis Proyectos" y tablero de tareas (front → API → BD) | Integración |
+| A-05 / A-05b | Grafana durante la prueba de carga y tablero actual corregido | Monitoreo / rendimiento |
+| A-06 | Grafana Explore + Loki: WARN del front durante la caída | Observabilidad |
+| A-07 / A-07b / A-07c | Alerta `ServicioCaido` en *firing*, alertas resueltas y falso positivo corregido (#18) | Alertas |
+| A-08 | Reporte HTML de k6 (ejecución 2) | Rendimiento |
+| A-09 | Prometheus: 5/5 objetivos *UP* | Monitoreo |
+| A-10a / A-10b / A-10c | Jenkins (3 pipelines en verde, etapas) y SonarQube (Quality Gate *Passed*) | CI/CD, calidad y seguridad |

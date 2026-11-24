@@ -22,6 +22,8 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 | 15 | 2026-11-24 | Despliegue / monitoreo | Prometheus conserva la configuracion vieja tras redesplegar | Media | Resuelta |
 | 16 | 2026-11-24 | Red | La red del administrador bloquea el puerto 22 de salida | Alta (para la demo) | Resuelta (SSH en 443) |
 | 17 | 2026-11-24 | CI | SonarQube rechaza el analisis: token de Jenkins vencido (HTTP 401) | Media | Resuelta |
+| 18 | 2026-11-24 | Monitoreo / alertas | Falso positivo de `LatenciaP95Alta` con poco trafico | Media | Resuelta |
+| 19 | 2026-11-24 | Operacion / monitoreo | Disco al 80 %, cAdvisor sin contenedores recreados y panel de disponibilidad duplicado | Alta | Resuelta |
 
 ---
 
@@ -139,6 +141,28 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 - **Nueva ejecucion / resultado:** `admin-proyectos-api #7` y `admin-proyectos-front #5` → **SUCCESS**, `ANALYSIS SUCCESSFUL`, Quality Gate `SUCCESS`.
 - **Leccion:** los tokens de integracion vencen; conviene registrar su fecha de expiracion y revisarlos antes de una entrega.
 
+### 18. Falso positivo de `LatenciaP95Alta` con poco trafico
+- **Problema:** durante la toma de capturas, `LatenciaP95Alta{job="front"}` paso a *pending* y despues a *firing* sin que hubiera un problema en la aplicacion.
+- **Evidencia:** captura `A-07c`; alerta activa desde 16:58:32 UTC con valor **6.73 s**; en los 10 minutos previos solo hubo **~12 peticiones**, casi todas a `uri="/**"` (recursos estaticos: imagen de fondo y videos de varios MB descargados por el navegador de capturas).
+- **Diagnostico:** con muy poco trafico, el p95 lo dominan un par de descargas grandes; la regla no distinguia recursos estaticos ni exigia un volumen minimo. Sin estaticos, el p95 real del front era **6 ms**.
+- **Correccion:** la regla excluye `uri=~"/actuator.*|/[*][*]"` y agrega `and on (job) sum by (job)(rate(...[5m])) > 0.1` (minimo 0.1 peticiones/s). `promtool check rules` → *SUCCESS: 7 rules found*. Commit `b000b14`.
+- **Nueva ejecucion / resultado:** redespliegue con Ansible (`failed=0`, reinicio de Prometheus por cambio de repositorio) → **0 alertas activas**; la consulta nueva no devuelve resultados con el mismo trafico.
+
+### 19. Disco al 80 %, cAdvisor sin contenedores recreados y disponibilidad duplicada
+- **Problema:** el tablero actual (revisado para la captura `A-05b`) mostraba disco raiz al **79.8 %** (umbral de alerta 85 %), los paneles *Memoria/CPU por contenedor* sin datos y el panel *Front arriba* con **CAIDO y ARRIBA** a la vez.
+- **Evidencia:** `docker system df` → 10 imagenes de la aplicacion (una por commit desplegado: 5 del front de 673 MB y 5 de la API) y **4.3 GB** de cache de compilacion; `du -sh /var/lib/containerd` → **12 GB**; `count(container_memory_working_set_bytes)` vacio hasta reiniciar cAdvisor (despues 11–12 series); en Prometheus coexistian `up{instance="front:8082"}` (vieja) y `up{instance="front:9082"}` (nueva).
+- **Diagnostico:**
+  1. Cada despliegue etiqueta las imagenes con el commit y nunca se borraban las anteriores.
+  2. Los 12 GB eran el almacen de imagenes de containerd que quedo **huerfano** al cambiar Docker a `overlay2` (incidencia #12): 12 imagenes (`ctr -n moby images ls`) que Docker ya no usa.
+  3. cAdvisor no detecta los contenedores que Docker recrea despues de su arranque (Docker 29 + factoria de containerd), asi que cada despliegue lo dejaba "ciego".
+  4. El panel mostraba una serie por instancia; al mover Actuator al puerto 9082 quedaron dos.
+- **Correccion:**
+  - Ansible: *Eliminar imagenes de versiones anteriores de la aplicacion* (conserva solo la del commit actual), *Eliminar imagenes huerfanas y cache de compilacion de mas de 3 dias* y *Reiniciar cAdvisor si se recrearon contenedores* (`when: compose.changed`). Commit `86f82e2`.
+  - Grafana: paneles de disponibilidad con `max(up{job=...})` y `avg_over_time(max(up{job="front"})[24h:1m])`; paneles de latencia sin recursos estaticos (igual que la alerta). Commit `86f82e2`.
+  - Limpieza unica del almacen huerfano de containerd con `ctr` (imagenes, snapshots y blobs del espacio `moby`), despues de verificar que **ningun contenedor en ejecucion lo usaba** (`ctr containers info` → `Snapshotter` vacio).
+- **Nueva ejecucion / resultado:** Ansible `ok=28 changed=6 failed=0`; queda una sola version de cada imagen; `/var/lib/containerd` 12 GB → 1.2 GB; **disco 80 % → 44 %**; 10 contenedores *Up* y la app responde 200; cAdvisor reporta 12 series; el tablero muestra una sola serie "ARRIBA" y memoria/CPU por contenedor (captura `A-05b`).
+- **Leccion:** las capturas y la revision del tablero son tambien una forma de prueba: aqui revelaron un riesgo operativo (disco lleno) antes de que disparara la alerta.
+
 ---
 
 ## Resumen
@@ -146,7 +170,7 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 | Tipo | Cantidad | Incidencias |
 |---|---|---|
 | Defectos de codigo encontrados por pruebas de carga, alertas o SAST | 3 | 11, 13, 14 |
-| Configuracion de infraestructura / monitoreo | 6 | 3, 6, 7, 12, 15, 16 |
+| Configuracion de infraestructura / monitoreo / operacion | 8 | 3, 6, 7, 12, 15, 16, 18, 19 |
 | Entorno y herramientas (incluye CI) | 6 | 1, 2, 5, 8, 10, 17 |
 | Riesgo de gobierno (suscripcion compartida) | 1 | 4 |
 | Por diseno (seguridad) | 1 | 9 |
