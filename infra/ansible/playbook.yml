@@ -92,11 +92,29 @@
         state: present
         update_cache: true
 
+    - name: Configurar el demonio de Docker (almacen overlay2 y rotacion de logs)
+      # - containerd-snapshotter=false: Docker 29 usa por defecto el almacen de containerd y
+      #   cAdvisor no puede identificar las capas de los contenedores con el (bitacora #12).
+      # - Rotacion de logs: evita que los logs de los contenedores llenen el disco.
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+        content: |
+          {
+            "features": { "containerd-snapshotter": false },
+            "log-driver": "json-file",
+            "log-opts": { "max-size": "10m", "max-file": "3" }
+          }
+      notify: Reiniciar Docker
+
     - name: Habilitar el servicio Docker
       ansible.builtin.service:
         name: docker
         state: started
         enabled: true
+
+    - name: Aplicar ahora la configuracion de Docker si cambio
+      ansible.builtin.meta: flush_handlers
 
     - name: Permitir al usuario administrador usar Docker
       ansible.builtin.user:
@@ -172,3 +190,9 @@
           Front: http://{{ inventory_hostname }}:8082 |
           Grafana: http://{{ inventory_hostname }}:3000 |
           Objetivos de Prometheus activos: {{ objetivos.json.data.activeTargets | length }}
+
+  handlers:
+    - name: Reiniciar Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
