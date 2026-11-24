@@ -38,7 +38,8 @@ resource "azurerm_network_security_group" "nsg" {
   resource_group_name = azurerm_resource_group.rg.name
   tags                = var.etiquetas
 
-  # SSH y API (8081, para pruebas de carga) solo desde la IP del administrador
+  # Solo desde la IP del administrador: SSH (22, y 443 como alternativa para redes que
+  # bloquean el 22, ver bitacora #16), API (8081, pruebas de carga) y Prometheus (9090)
   security_rule {
     name                       = "admin-ssh-api"
     priority                   = 100
@@ -46,7 +47,7 @@ resource "azurerm_network_security_group" "nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_ranges    = ["22", "8081", "9090"]
+    destination_port_ranges    = ["22", "443", "8081", "9090"]
     source_address_prefix      = local.ip_admin
     destination_address_prefix = "*"
   }

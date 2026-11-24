@@ -65,6 +65,24 @@
         path: /etc/fstab
         line: "/swapfile none swap sw 0 0"
 
+    # ---------- SSH alternativo en 443 ----------
+    # Algunas redes (p. ej. la de la escuela) bloquean el puerto 22 de salida. sshd tambien
+    # escucha en 443; el NSG solo lo permite desde la IP del administrador (bitacora #16).
+    - name: Crear carpeta de ajustes del socket de SSH
+      ansible.builtin.file:
+        path: /etc/systemd/system/ssh.socket.d
+        state: directory
+        mode: "0755"
+
+    - name: Escuchar SSH tambien en el puerto 443
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ssh.socket.d/puerto-443.conf
+        mode: "0644"
+        content: |
+          [Socket]
+          ListenStream=0.0.0.0:443
+      notify: Reiniciar socket de SSH
+
     # ---------- Docker (repositorio oficial) ----------
     - name: Crear carpeta de llaves de apt
       ansible.builtin.file:
@@ -153,6 +171,13 @@
       register: compose
       changed_when: "'Started' in compose.stderr or 'Recreated' in compose.stderr or 'Built' in compose.stderr"
 
+    - name: Recargar la configuracion de monitoreo si cambio el repositorio
+      # Prometheus, Alertmanager y Alloy leen su configuracion al arrancar (bitacora #15)
+      ansible.builtin.command: docker compose restart prometheus alertmanager alloy
+      args:
+        chdir: "{{ dir_app }}/deploy"
+      when: repo.changed
+
     # ---------- Verificacion ----------
     - name: Esperar a que el front responda saludable
       # Actuator esta en un puerto interno: se usa el HEALTHCHECK de Docker (que consulta /actuator/health)
@@ -192,6 +217,12 @@
           Objetivos de Prometheus activos: {{ objetivos.json.data.activeTargets | length }}
 
   handlers:
+    - name: Reiniciar socket de SSH
+      ansible.builtin.systemd_service:
+        name: ssh.socket
+        state: restarted
+        daemon_reload: true
+
     - name: Reiniciar Docker
       ansible.builtin.service:
         name: docker

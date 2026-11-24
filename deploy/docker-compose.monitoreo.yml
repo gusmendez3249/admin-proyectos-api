@@ -13,8 +13,9 @@ services:
       - --storage.tsdb.retention.time=15d
       - --web.enable-lifecycle
     volumes:
-      - ./monitoreo/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoreo/prometheus/alertas.yml:/etc/prometheus/alertas.yml:ro
+      # Se monta la carpeta (no archivos sueltos): al actualizar el repo con git, un montaje de
+      # archivo individual seguiria apuntando a la version anterior (bitacora #15)
+      - ./monitoreo/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
@@ -27,7 +28,7 @@ services:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
     volumes:
-      - ./monitoreo/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoreo/alertmanager:/etc/alertmanager:ro
     # Sin puerto publicado: se consulta desde Grafana o con un tunel SSH (ssh -L 9093:localhost:9093)
     expose:
       - "9093"
@@ -85,7 +86,7 @@ services:
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
     volumes:
-      - ./monitoreo/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./monitoreo/alloy:/etc/alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - loki
