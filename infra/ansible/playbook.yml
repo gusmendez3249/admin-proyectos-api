@@ -155,11 +155,11 @@
 
     # ---------- Verificacion ----------
     - name: Esperar a que el front responda saludable
-      ansible.builtin.uri:
-        url: http://localhost:8082/actuator/health
-        return_content: true
+      # Actuator esta en un puerto interno: se usa el HEALTHCHECK de Docker (que consulta /actuator/health)
+      ansible.builtin.command: docker inspect --format '{{ '{{' }}.State.Health.Status{{ '}}' }}' admin-proyectos-front-1
       register: salud
-      until: salud.status == 200 and '"UP"' in salud.content
+      changed_when: false
+      until: salud.stdout == 'healthy'
       retries: 30
       delay: 10
 

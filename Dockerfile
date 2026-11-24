@@ -15,8 +15,9 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/target/*.jar app.jar
 USER app
 EXPOSE 8081
+# 9081: puerto interno de Actuator (health y metricas); no se publica
 # La conexion a la BD llega por variables de entorno: DB_URL, DB_USERNAME, DB_PASSWORD
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO- http://localhost:8081/actuator/health || exit 1
+  CMD wget -qO- http://localhost:9081/actuator/health || exit 1
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

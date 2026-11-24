@@ -21,13 +21,13 @@ scrape_configs:
   - job_name: api
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["api:8081"]
+      - targets: ["api:9081"]   # puerto interno de Actuator
         labels: { servicio: api }
 
   - job_name: front
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["front:8082"]
+      - targets: ["front:9082"] # puerto interno de Actuator
         labels: { servicio: front }
 
   # Infraestructura: CPU, memoria, disco y red de la VM
