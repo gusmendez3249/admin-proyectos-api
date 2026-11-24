@@ -109,8 +109,8 @@ Ejecutar solo la aplicación en local: `cd deploy; copy .env.example .env; docke
 - **Sin secretos en Git:** `.env`, `terraform.tfvars`, `*.tfstate*`, `.terraform/` e `inventario.ini` están en `.gitignore`; solo se versionan plantillas (`*.example`).
 - **Contraseñas generadas en la VM:** Ansible genera contraseñas aleatorias de 24 caracteres para PostgreSQL y Grafana en la primera instalación y las **conserva** en despliegues posteriores; el `.env` queda con permisos `600 root`. Las tareas con secretos usan `no_log: true`.
 - **Autenticación sin llaves en archivos:** Terraform usa la sesión de Azure CLI; la VM solo acepta llave SSH (`disable_password_authentication = true`).
-- **Mínimo privilegio en red:** solo 8082 (front) y 3000 (Grafana, con usuario y contraseña) abiertos a Internet; 22, 8081 y 9090 solo desde la IP del administrador (detectada automáticamente); PostgreSQL sin puerto publicado.
-- **Aplicación:** contraseñas de usuarios con BCrypt, DTOs para evitar *mass assignment* (CWE-915), Actuator expone solo `health`, `info` y `prometheus`, contenedores sin root.
+- **Mínimo privilegio en red:** solo 8082 (front) y 3000 (Grafana, con usuario y contraseña) abiertos a Internet; 22 y 443 (SSH alternativo para redes que bloquean el 22), 8081 y 9090 solo desde la IP del administrador (detectada automáticamente); PostgreSQL sin puerto publicado.
+- **Aplicación:** contraseñas de usuarios con BCrypt, DTOs para evitar *mass assignment* (CWE-915), Actuator expone solo `health` y `prometheus` y en un **puerto interno de administración** (9081/9082) que no se publica fuera de Docker (hallazgo de Semgrep, bitácora #14), contenedores sin root.
 - **Suscripción compartida:** todos los recursos en un grupo propio con prefijo único; revisión de `terraform plan` antes de cada `apply` (bitácora #4).
 
 ## 6. Servicio en la nube y verificación
@@ -121,8 +121,9 @@ Ejecutar solo la aplicación en local: `cd deploy; copy .env.example .env; docke
 
 | Componente | Verificación | Resultado |
 |---|---|---|
-| Front | `GET :8082/login`, `/actuator/health` desde Internet | HTTP 200 |
-| Back (API) | `GET :8081/actuator/health` (IP del administrador) | HTTP 200 |
+| Front | `GET :8082/login` desde Internet | HTTP 200 |
+| Back (API) | `/actuator/health` por el puerto interno 9081 (HEALTHCHECK de Docker y Prometheus) | `UP` / *healthy* |
+| Actuator no expuesto | `GET :8082/actuator/prometheus` y `:8081/actuator/prometheus` desde Internet | HTTP 404 |
 | Front → API → BD | `POST /verificarLogin` con usuario demo | Usuario devuelto (BCrypt validado contra PostgreSQL) |
 | Front → API → BD | `POST /consultarProyectos` | Proyectos leídos de PostgreSQL |
 | Base de datos | `psql` dentro de la VM | 5 tablas con datos (3 usuarios, 1 proyecto, 1 tarea, 2 comentarios) |
@@ -137,11 +138,11 @@ Ejecutados en Jenkins durante las Unidades II–III (evidencias originales en el
 
 | Reporte | Resultado |
 |---|---|
-| Pipelines Jenkins (front, API, BD) | Los 3 con **SUCCESS** (`admin-proyectos-front-build-3`, `admin-proyectos-api-build-5`, `admin-proyectos-bd-build-1`) |
-| Pruebas (Surefire) | API: 63 pruebas · front: 39 pruebas (38 + regresión AUT-E17 de esta unidad), 0 fallos |
+| Pipelines Jenkins sobre el **código final** (24 nov) | Los 3 con **SUCCESS**: `admin-proyectos-api #8` (`0ab3c00`), `admin-proyectos-front #6` (`58d0e9b`), `admin-proyectos-bd #3`. Antes: api #6 y front #4 FAILURE por token de SonarQube vencido (bitácora #17). Logs en el portafolio `evidencia-unidad3/04-ci-calidad-seguridad/` |
+| Pruebas (Surefire) | API: 63 pruebas · front: 39 pruebas (38 + regresión AUT-E17 de esta unidad), 0 fallos; BD: BD-01…BD-08 OK |
 | Cobertura (JaCoCo) | **100 %** de métodos, líneas y ramas en ambos; la regla `jacoco:check` rompe el build si baja. Sin exclusiones (el `main` se prueba con `mockStatic`). |
-| SonarQube (Community Build 26.10) | Quality Gate **OK** en ambos; 0 bugs, 0 vulnerabilidades, 0 code smells, 0 hotspots; calificaciones A. Antes de la corrección: 18 vulnerabilidades `java:S4684` (CWE-915, calificación D), corregidas con DTOs |
-| Semgrep (SAST) | OWASP Top 10 + `p/java` + `p/secrets` + reglas propias, excluyendo `target/`. Junto con SonarQube y las pruebas se clasificaron 17 incidencias: 12 corregidas, 1 falso positivo justificado, 3 aceptadas con justificación (p. ej. hashes BCrypt de la contraseña demo documentada) y 1 informativa |
+| SonarQube (Community Build 26.10) | Re-ejecución final: Quality Gate **OK** en ambos; 0 bugs, 0 vulnerabilidades, 0 code smells, 0 hotspots; calificaciones A. Antes de la corrección: 18 vulnerabilidades `java:S4684` (CWE-915, calificación D), corregidas con DTOs |
+| Semgrep (SAST) | OWASP Top 10 + `p/java` + `p/secrets` + reglas propias, excluyendo `target/`. Ejecución final: 1 hallazgo por repositorio, `spring-actuator-dangerous-endpoints-enabled`, **mitigado** moviendo Actuator a un puerto interno (bitácora #14); BD: 0. En la Práctica 3, junto con SonarQube y las pruebas se clasificaron 17 incidencias: 12 corregidas, 1 falso positivo justificado, 3 aceptadas con justificación (p. ej. hashes BCrypt de la contraseña demo documentada) y 1 informativa |
 
 ### 7.2 Infraestructura como código
 
@@ -155,12 +156,13 @@ Ejecutados en Jenkins durante las Unidades II–III (evidencias originales en el
 | Ansible, con monitoreo | `ok=21 changed=3 failed=0` (idempotencia: solo cambian repo, `.env` y contenedores) |
 | Ansible, configuración de Docker | `ok=23 changed=5 failed=0` (handler *Reiniciar Docker*) |
 | Ansible, redespliegues posteriores | `ok=21–22 changed=1 failed=0` |
+| Ansible por SSH en 443 (red que bloquea el 22) | `ok=25 changed=4 failed=0` |
 
 ### 7.3 Monitoreo y observabilidad
 
 | Elemento | Implementación | Evidencia |
 |---|---|---|
-| Métricas de aplicación | Actuator + Micrometer (`http_server_requests` con histograma, JVM, Tomcat) en API y front | 5/5 objetivos *up* en Prometheus |
+| Métricas de aplicación | Actuator + Micrometer (`http_server_requests` con histograma, JVM, Tomcat) en API y front, leídas por el puerto interno 9081/9082 | 5/5 objetivos *up* en Prometheus |
 | Métricas de infraestructura | node-exporter (CPU, memoria, disco, swap de la VM) y cAdvisor (CPU y memoria por contenedor) | Paneles *Recursos* del tablero |
 | Disponibilidad | `up{job}` y `avg_over_time(up[24h])` | Paneles *API/Front arriba* y *Disponibilidad 24 h* |
 | Errores | Tasa de 4xx/5xx por servicio | Panel *Errores* y stat *Errores 5xx* |
@@ -198,13 +200,15 @@ Detalle completo en **[pruebas-carga/README.md](../pruebas-carga/README.md)**. E
 
 ## 8. Bitácora de incidencias
 
-Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (13 incidencias). Las más relevantes:
+Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (17 incidencias). Las más relevantes:
 
 | # | Incidencia | Corrección |
 |---|---|---|
 | 11 | 100 % de los logins fallan bajo carga por `Transfer-Encoding` duplicado | Reenviar solo estado y cuerpo; prueba de regresión AUT-E17; k6 pasa a 0 % de errores |
 | 12 | cAdvisor sin métricas por contenedor (Docker 29 + containerd snapshotter) | `daemon.json` gestionado por Ansible con handler |
 | 13 | El front respondía 503 sin dejar rastro en los logs | `log.warn` en el manejador; verificado en Loki |
+| 14 | Semgrep: `/actuator/prometheus` accesible desde Internet | Actuator en puerto interno 9081/9082; ahora HTTP 404 desde fuera |
+| 16 | La red bloquea SSH (22): riesgo para la demo en vivo | SSH alternativo en 443 gestionado por Terraform + Ansible |
 | 7 | Riesgo de romper la conexión a la BD al regenerar contraseñas | El playbook conserva los secretos existentes |
 | 6 | SSH bloqueado por IP dinámica | `terraform apply` re-detecta la IP (solo cambia la regla) |
 | 4 | Suscripción compartida con recursos ajenos | Grupo y prefijo propios; revisión de `plan` |
@@ -214,7 +218,7 @@ Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejec
 ### Conclusiones
 1. El circuito DevOps quedó **completo y verificable**: cada cambio pasa por pruebas, cobertura, calidad y SAST; la infraestructura se crea y configura con código versionado y reproducible; la aplicación corre en Azure integrada (front → API → PostgreSQL) y está monitoreada con métricas, logs, tablero y alertas.
 2. **Terraform y Ansible se complementan:** Terraform hizo visible cada cambio antes de aplicarlo (`plan`) y detecta deriva; Ansible permitió corregir la configuración del servidor (Docker, secretos) de forma idempotente, sin entrar a mano a la VM.
-3. **La retroalimentación funcionó en la práctica:** la prueba de carga y la prueba de alertas encontraron dos defectos reales de código (#11, #13) que volvieron al repositorio como commits con su prueba de regresión, y el monitoreo encontró un problema de infraestructura (#12).
+3. **La retroalimentación funcionó en la práctica:** la prueba de carga, la prueba de alertas y el SAST encontraron tres defectos reales (#11, #13, #14) que volvieron al repositorio como commits con su prueba de regresión, y el monitoreo encontró un problema de infraestructura (#12).
 4. El sistema cumple los criterios de rendimiento con margen (0 % de errores, p95 de 190 ms, CPU máx. 53 % con 50 usuarios).
 
 ### Limitaciones
@@ -231,8 +235,8 @@ Etapa de despliegue en Jenkins con credencial SSH, backend remoto de Terraform, 
 
 ## 10. Referencias
 
-- Repositorio API: https://github.com/gusmendez3249/admin-proyectos-api — commits de esta unidad: `f1f6215`, `e5e293c`, `ef65b53`, `412d1d8` (y la documentación).
-- Repositorio front: https://github.com/gusmendez3249/admin-proyectos-front — commits: `981d14a`, `71c9f73`, `36cc74b`.
+- Repositorio API: https://github.com/gusmendez3249/admin-proyectos-api — commits de esta unidad: `f1f6215`, `e5e293c`, `ef65b53`, `412d1d8`, `7c040c3`, `0ab3c00` (y la documentación).
+- Repositorio front: https://github.com/gusmendez3249/admin-proyectos-front — commits: `981d14a`, `71c9f73`, `36cc74b`, `58d0e9b`.
 - Terraform AzureRM provider: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
 - Ansible: https://docs.ansible.com/ansible/latest/
 - Docker Compose: https://docs.docker.com/compose/

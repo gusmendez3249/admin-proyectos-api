@@ -1,4 +1,4 @@
-# Evidencia de infraestructura - generada 2026-11-24T04:05:54Z
+# Evidencia de infraestructura - generada 2026-11-24T16:48:08Z
 
 ## terraform version
 Terraform v1.17.2
@@ -37,12 +37,12 @@ vm-gusmendez-devops      Microsoft.Compute/virtualMachines        northcentralus
 osdisk-gusmendez-devops  Microsoft.Compute/disks                  northcentralus
 
 ## Reglas del NSG (IP de administrador omitida)
-Regla          Prioridad    Acceso    Puertos       Origen
--------------  -----------  --------  ------------  ----------------
-admin-ssh-api  100          Allow     22,8081,9090  <IP-admin>/32
-web-publico    110          Allow     8082,3000     Internet
+Regla          Prioridad    Acceso    Puertos           Origen
+-------------  -----------  --------  ----------------  ----------------
+web-publico    110          Allow     8082,3000         Internet
+admin-ssh-api  100          Allow     22,8081,9090,443  <IP-admin>/32
 
 ## VM
-Vm                   Tamano             So                Estado      Auth_password
--------------------  -----------------  ----------------  ----------  ---------------
+Vm                   Tamano             So                Estado      Auth_password_deshabilitada
+-------------------  -----------------  ----------------  ----------  -----------------------------
 vm-gusmendez-devops  Standard_B2als_v2  ubuntu-24_04-lts  VM running  True

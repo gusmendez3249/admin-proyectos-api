@@ -1,27 +1,34 @@
-# Verificacion de servicios en Azure - 2026-11-24T04:05:54Z
+# Verificacion de servicios en Azure - 2026-11-24T16:47:38Z
 
 ## Desde Internet (equipo del administrador)
 GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8082/login -> HTTP 200
-GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8082/actuator/health -> HTTP 200
 GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:3000/api/health -> HTTP 200
-GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8081/actuator/health -> HTTP 200
+GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8082/actuator/prometheus -> HTTP 404   (Actuator no expuesto: se espera 404)
+GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8082/actuator/health -> HTTP 404   (Actuator no expuesto: se espera 404)
+GET http://gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com:8081/actuator/prometheus -> HTTP 404   (Actuator no expuesto: se espera 404)
 POST /verificarLogin (usuario demo) -> {"id_usuario":131,"nombre":"Usuario Demo Uno","correo_electronico":"demo1@gestor.test","contrasena":null,"rol":"Estudian
 POST /consultarProyectos -> 1 proyectos, ej.: My API Rest
-PostgreSQL 5432 desde Internet -> 000sin conexion (bloqueado)
+PostgreSQL 5432 desde Internet -> sin conexion (bloqueado)
+SSH: puerto 22 -> sin respuesta desde esta red (bloqueo de la red local, bitacora #16); puerto 443 -> OK
 
-## Dentro de la VM
-commit desplegado (repo API): 412d1d8 Configurar el demonio de Docker desde Ansible: almacen overlay2 y rotacion de logs
+## Dentro de la VM (SSH por 443)
+commit desplegado (repo API): 0ab3c00 SSH alternativo en 443 y recarga confiable de la configuracion de monitoreo
+
 SERVICE         IMAGE                              STATUS
-alertmanager    prom/alertmanager:v0.27.0          Up 14 minutes
-alloy           grafana/alloy:v1.2.0               Up 14 minutes
-api             admin-proyectos-api:412d1d8        Up 3 minutes (healthy)
-cadvisor        gcr.io/cadvisor/cadvisor:v0.49.1   Up 14 minutes (healthy)
-db              postgres:16-alpine                 Up 14 minutes (healthy)
-front           admin-proyectos-front:412d1d8      Up 3 minutes (healthy)
-grafana         grafana/grafana:11.1.0             Up 14 minutes
-loki            grafana/loki:3.1.0                 Up 14 minutes
-node-exporter   prom/node-exporter:v1.8.1          Up 14 minutes
-prometheus      prom/prometheus:v2.53.0            Up 14 minutes
+alertmanager    prom/alertmanager:v0.27.0          Up 4 minutes
+alloy           grafana/alloy:v1.2.0               Up 4 minutes
+api             admin-proyectos-api:0ab3c00        Up 5 minutes (healthy)
+cadvisor        gcr.io/cadvisor/cadvisor:v0.49.1   Up 18 minutes (healthy)
+db              postgres:16-alpine                 Up 18 minutes (healthy)
+front           admin-proyectos-front:0ab3c00      Up 4 minutes (healthy)
+grafana         grafana/grafana:11.1.0             Up 18 minutes
+loki            grafana/loki:3.1.0                 Up 18 minutes
+node-exporter   prom/node-exporter:v1.8.1          Up 18 minutes
+prometheus      prom/prometheus:v2.53.0            Up 4 minutes
+
+-- Salud por el puerto interno de Actuator
+  api   9081: {"status":"UP","groups":["liveness","readiness"]}
+  front 9082: {"status":"UP","groups":["liveness","readiness"]}
 
 -- Base de datos (registros por tabla)
 usuario|3
@@ -31,13 +38,13 @@ comentarios|2
 asignaciones|0
 
 -- Prometheus: objetivos
-   api up http://api:8081/actuator/prometheus
+   api up http://api:9081/actuator/prometheus
    cadvisor up http://cadvisor:8080/metrics
-   front up http://front:8082/actuator/prometheus
+   front up http://front:9082/actuator/prometheus
    node up http://node-exporter:9100/metrics
    prometheus up http://localhost:9090/metrics
 -- Prometheus: reglas de alerta
-   aplicacion -> TasaErrores5xxAlta ok firing   <- disparada por los 503 de la caida simulada (ver prueba-alerta.log); se resuelve al salir de la ventana de 5 min
+   aplicacion -> TasaErrores5xxAlta ok inactive
    aplicacion -> LatenciaP95Alta ok inactive
    aplicacion -> HeapJVMAlto ok inactive
    disponibilidad -> ServicioCaido ok inactive
@@ -46,8 +53,12 @@ asignaciones|0
    infraestructura -> DiscoCasiLleno ok inactive
 -- Permisos del .env
   600 root .env
+-- SSH escucha en
+  LISTEN 0      4096         0.0.0.0:443       0.0.0.0:*          
+  LISTEN 0      4096         0.0.0.0:22        0.0.0.0:*          
+  LISTEN 0      4096            [::]:22           [::]:*          
 -- Docker
   version 29.10.0, almacen overlay2, logging json-file
                total        used        free      shared  buff/cache   available
-Mem:           3.8Gi       1.4Gi       287Mi        19Mi       2.5Gi       2.4Gi
-Swap:          2.0Gi       131Mi       1.9Gi
+Mem:           3.8Gi       1.3Gi       269Mi        18Mi       2.5Gi       2.5Gi
+Swap:          2.0Gi        15Mi       2.0Gi

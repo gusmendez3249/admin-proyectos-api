@@ -18,6 +18,10 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 | 11 | 2026-11-23 | Rendimiento / codigo | **100% de los inicios de sesion fallan bajo carga: `Transfer-Encoding` duplicado** | **Alta** | **Corregida en codigo** |
 | 12 | 2026-11-23 | Monitoreo | cAdvisor no reporta metricas por contenedor | Media | Resuelta (Ansible) |
 | 13 | 2026-11-23 | Observabilidad / codigo | El front responde 503 sin dejar rastro en los logs | Media | Corregida en codigo |
+| 14 | 2026-11-24 | Seguridad (SAST) | Semgrep: endpoints de Actuator expuestos en el puerto publico | Media | Mitigada (puerto interno) |
+| 15 | 2026-11-24 | Despliegue / monitoreo | Prometheus conserva la configuracion vieja tras redesplegar | Media | Resuelta |
+| 16 | 2026-11-24 | Red | La red del administrador bloquea el puerto 22 de salida | Alta (para la demo) | Resuelta (SSH en 443) |
+| 17 | 2026-11-24 | CI | SonarQube rechaza el analisis: token de Jenkins vencido (HTTP 401) | Media | Resuelta |
 
 ---
 
@@ -106,15 +110,44 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 - **Nueva ejecucion:** caida corta de la API (2 peticiones → 503).
 - **Resultado:** Loki devuelve `WARN ... GestorController : Backend no disponible, se responde 503: I/O error on POST request for "http://api:8081/buscarProyectos"`. Observacion: los logs de un contenedor recien creado tardan hasta ~1 min en llegar a Loki porque Alloy redescubre los contenedores cada minuto (comportamiento esperado de `discovery.docker`).
 
+### 14. Semgrep: endpoints de Actuator expuestos en el puerto publico
+- **Problema:** al re-ejecutar los pipelines con el codigo de la Unidad III, Semgrep reporto 1 hallazgo en cada repositorio (antes 0): `java.spring.security.audit.spring-actuator-non-health-enabled.spring-actuator-dangerous-endpoints-enabled` (WARNING) en `application.properties`.
+- **Evidencia:** `admin-proyectos-api #7` y `admin-proyectos-front #5` → `Ran 264 rules on 81 files: 1 finding` / `Ran 203 rules on 78 files: 1 finding`; desde Internet `http://<dns>:8082/actuator/prometheus` respondia HTTP 200 con metricas internas (rutas, JVM, memoria).
+- **Diagnostico:** hallazgo **real** introducido en esta unidad: al agregar Actuator para Prometheus, `health`, `info` y `prometheus` quedaron en el mismo puerto que la aplicacion, y el 8082 es publico.
+- **Correccion:** `management.server.port` (9081 API, 9082 front), puerto interno que no se publica fuera de la red de Docker; se retira `info`; Prometheus y el `HEALTHCHECK` usan el puerto interno; Ansible verifica la salud con el estado del HEALTHCHECK. Commits `7c040c3` (API) y `58d0e9b` (front). `mvn verify`: 63 y 39 pruebas OK, JaCoCo 100 %.
+- **Nueva ejecucion / resultado:** desde Internet `:8082/actuator/prometheus`, `:8082/actuator/health` y `:8081/actuator/prometheus` → **HTTP 404**; Prometheus 5/5 objetivos *up* por `api:9081` y `front:9082`. La regla de Semgrep sigue marcando la propiedad (detecta que `prometheus` esta habilitado, no en que puerto), por lo que el hallazgo se **acepta con mitigacion documentada**: el endpoint es necesario para el monitoreo y ya no es accesible desde fuera.
+
+### 15. Prometheus conserva la configuracion vieja tras redesplegar
+- **Problema:** despues de mover Actuator al puerto interno, Prometheus mostraba `api` y `front` en estado *down*.
+- **Evidencia:** `/api/v1/targets` seguia apuntando a `http://api:8081/...` y `http://front:8082/...` aunque `prometheus.yml` en la VM ya decia 9081/9082.
+- **Diagnostico:** el compose montaba **archivos individuales** (`prometheus.yml`, `alertas.yml`, `alertmanager.yml`, `config.alloy`). Un montaje de archivo queda ligado al inodo original; `git` reemplaza el archivo (nuevo inodo), asi que el contenedor seguia viendo la version anterior. Ademas Prometheus solo lee la configuracion al arrancar.
+- **Correccion:** montar **carpetas** de configuracion y agregar en Ansible la tarea *Recargar la configuracion de monitoreo si cambio el repositorio* (`docker compose restart prometheus alertmanager alloy`, solo `when: repo.changed`). Commit `0ab3c00`.
+- **Nueva ejecucion / resultado:** `PLAY RECAP ok=25 changed=4 failed=0`; la verificacion final del playbook confirma 5/5 objetivos *up*.
+
+### 16. La red del administrador bloquea el puerto 22 de salida
+- **Problema:** Ansible fallo con `ssh: connect to host 20.221.204.187 port 22: Connection timed out` (primero a mitad del playbook y despues desde *Gathering Facts*).
+- **Evidencia:** la IP del administrador coincidia con la regla del NSG; la VM respondia en 8082, 3000 y 8081 (tambien solo-admin), pero no en 22. Prueba de control: `github.com:22` tambien bloqueado, `ssh.github.com:443` abierto → bloqueo en la red local, no en Azure.
+- **Diagnostico:** la red (institucional) filtra el puerto 22 de salida. Riesgo alto para la **defensa presencial**, donde se demuestra Ansible en vivo.
+- **Correccion:** SSH alternativo en **443**: Terraform agrega 443 a la regla de administracion (solo IP del administrador; `0 added, 1 changed`); Ansible gestiona el *drop-in* `/etc/systemd/system/ssh.socket.d/puerto-443.conf` con un handler que reinicia `ssh.socket` (se conserva el 22). Como en ese momento no habia SSH, la primera configuracion se aplico una sola vez con `az vm run-command` (API de Azure por HTTPS); a partir de ahi Ansible es el responsable. `desplegar-ansible.ps1 -PuertoSsh 443`. Commit `0ab3c00`.
+- **Nueva ejecucion / resultado:** `ssh -p 443` OK; despliegue completo por 443: `ok=25 changed=4 failed=0`.
+
+### 17. SonarQube rechaza el analisis: token de Jenkins vencido
+- **Problema:** `admin-proyectos-api #6` y `admin-proyectos-front #4` terminaron en **FAILURE** en la etapa *Analisis SonarQube*; Quality Gate y Semgrep se omitieron. Compilacion, pruebas y cobertura si pasaron.
+- **Evidencia:** `[ERROR] Failed to query server version: GET http://sonarqube:9000/api/v2/analysis/version failed with HTTP 401. Please check the property sonar.token`.
+- **Diagnostico:** la credencial `sonarqube-token` de Jenkins tenia un token que ya no era valido en SonarQube (generado en la Unidad II).
+- **Correccion:** el administrador genero un token nuevo (*Global Analysis Token*) en SonarQube y actualizo la credencial en Jenkins (los secretos no se escriben en el repositorio ni en la bitacora). Ademas se restablecio la contrasena del usuario de Jenkins con `restablecer-password-jenkins.ps1` (BCrypt, con respaldo de la configuracion).
+- **Nueva ejecucion / resultado:** `admin-proyectos-api #7` y `admin-proyectos-front #5` → **SUCCESS**, `ANALYSIS SUCCESSFUL`, Quality Gate `SUCCESS`.
+- **Leccion:** los tokens de integracion vencen; conviene registrar su fecha de expiracion y revisarlos antes de una entrega.
+
 ---
 
 ## Resumen
 
 | Tipo | Cantidad | Incidencias |
 |---|---|---|
-| Defectos de codigo encontrados por pruebas de carga / alertas | 2 | 11, 13 |
-| Configuracion de infraestructura / monitoreo | 4 | 3, 6, 7, 12 |
-| Entorno y herramientas | 5 | 1, 2, 5, 8, 10 |
+| Defectos de codigo encontrados por pruebas de carga, alertas o SAST | 3 | 11, 13, 14 |
+| Configuracion de infraestructura / monitoreo | 6 | 3, 6, 7, 12, 15, 16 |
+| Entorno y herramientas (incluye CI) | 6 | 1, 2, 5, 8, 10, 17 |
 | Riesgo de gobierno (suscripcion compartida) | 1 | 4 |
 | Por diseno (seguridad) | 1 | 9 |
 

@@ -24,7 +24,7 @@ flowchart LR
     end
 
     subgraph AZ["Microsoft Azure — rg-gusmendez-devops (North Central US)"]
-        nsg{{"NSG / firewall<br/>8082, 3000 publicos<br/>22, 8081, 9090 solo admin"}}
+        nsg{{"NSG / firewall<br/>8082, 3000 publicos<br/>22/443, 8081, 9090 solo admin"}}
         subgraph VM["VM Ubuntu 24.04 · B2als_v2 (2 vCPU / 4 GB) · Docker Compose"]
             front["front<br/>Spring Boot + Thymeleaf :8082"]
             api["api<br/>Spring Boot REST :8081"]
@@ -83,12 +83,12 @@ flowchart LR
 |---|---|---|---|
 | Usuario | front | 8082/tcp | Internet |
 | Administrador | Grafana | 3000/tcp | Internet (con usuario y contrasena) |
-| Administrador | SSH, API, Prometheus | 22, 8081, 9090/tcp | Solo IP del administrador (NSG) |
+| Administrador | SSH, API, Prometheus | 22 (y 443 alternativo), 8081, 9090/tcp | Solo IP del administrador (NSG) |
 | front | api | 8081 | Red interna de Docker |
 | api | PostgreSQL | 5432 | Red interna de Docker (sin puerto publicado) |
-| Prometheus | api, front, node-exporter, cAdvisor | 8081, 8082, 9100, 8080 | Red interna |
+| Prometheus | api, front (Actuator), node-exporter, cAdvisor | 9081, 9082, 9100, 8080 | Red interna (puertos de administración no publicados) |
 | Alloy | Loki | 3100 | Red interna |
-| Ansible | VM | 22 | Llave SSH ed25519 |
+| Ansible | VM | 22 o 443 | Llave SSH ed25519 |
 
 ## 4. Justificacion de decisiones
 
@@ -108,5 +108,5 @@ flowchart LR
 - Firewall con minimo privilegio: solo 8082 y 3000 abiertos al publico.
 - Contenedores de la aplicacion con usuario sin privilegios y limites de memoria.
 - Sin secretos en el repositorio: `.env`, `terraform.tfvars`, `*.tfstate` e inventario estan en `.gitignore`. Las contrasenas se generan aleatoriamente en la VM (permisos 600).
-- Contrasenas de usuarios cifradas con BCrypt; Actuator solo expone `health`, `info` y `prometheus`.
+- Contrasenas de usuarios cifradas con BCrypt; Actuator solo expone `health` y `prometheus`, en un puerto interno (9081/9082) no publicado.
 - SAST (Semgrep) y analisis de calidad (SonarQube) en el pipeline.

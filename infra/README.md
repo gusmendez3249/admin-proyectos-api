@@ -10,7 +10,7 @@ Terraform genera `ansible/inventario.ini` con la IP real de la VM, así que las 
 
 ## Seguridad
 - Acceso a la VM **solo con llave SSH** (contraseñas deshabilitadas); la llave privada nunca sale del equipo local.
-- NSG: puertos 22, 8081 y 9090 solo desde la IP del administrador (se detecta sola); 8082 (front) y 3000 (Grafana) públicos; todo lo demás bloqueado. PostgreSQL no publica puerto.
+- NSG: puertos 22 y 443 (SSH alternativo), 8081 y 9090 solo desde la IP del administrador (se detecta sola); 8082 (front) y 3000 (Grafana) públicos; todo lo demás bloqueado. PostgreSQL no publica puerto.
 - Sin secretos en el repo: `terraform.tfvars`, `*.tfstate`, `.env` e `inventario.ini` están en `.gitignore`. Las contraseñas de PostgreSQL y Grafana las genera Ansible (aleatorias, 24 caracteres) en la primera instalación, se conservan en los despliegues siguientes y se guardan solo en la VM con permisos `0600`. Para verlas: `ssh ... "sudo cat /opt/admin-proyectos/deploy/.env"`.
 - Terraform se autentica con la sesión de Azure CLI (`az login`), no con llaves en archivos.
 
@@ -34,7 +34,7 @@ terraform apply plan.tfplan
 
 # 4. Configurar y desplegar (Ansible en contenedor)
 cd ..\..
-powershell -ExecutionPolicy Bypass -File infra\desplegar-ansible.ps1
+powershell -ExecutionPolicy Bypass -File infra\desplegar-ansible.ps1            # o con -PuertoSsh 443 si la red bloquea el 22
 
 # 5. Verificar
 terraform -chdir=infra\terraform output url_front
