@@ -95,6 +95,22 @@ resource "azurerm_linux_virtual_machine" "ci" {
     public_key = file(pathexpand(var.ruta_llave_publica))
   }
 
+  # cloud-init: SSH tambien en 443 desde el primer arranque, para poder ejecutar Ansible
+  # aun desde redes que bloquean el puerto 22 (bitacora #16). Ansible mantiene el mismo ajuste.
+  custom_data = base64encode(<<-EOT
+    #cloud-config
+    write_files:
+      - path: /etc/systemd/system/ssh.socket.d/puerto-443.conf
+        permissions: "0644"
+        content: |
+          [Socket]
+          ListenStream=0.0.0.0:443
+    runcmd:
+      - systemctl daemon-reload
+      - systemctl restart ssh.socket
+  EOT
+  )
+
   os_disk {
     name                 = "osdisk-${var.prefijo}-ci"
     caching              = "ReadWrite"

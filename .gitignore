@@ -47,3 +47,4 @@ semgrep-report.*
 !*.tfvars.example
 crash.log
 infra/ansible/inventario.ini
+*.tfplan
