@@ -24,6 +24,8 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 | 17 | 2026-11-24 | CI | SonarQube rechaza el analisis: token de Jenkins vencido (HTTP 401) | Media | Resuelta |
 | 18 | 2026-11-24 | Monitoreo / alertas | Falso positivo de `LatenciaP95Alta` con poco trafico | Media | Resuelta |
 | 19 | 2026-11-24 | Operacion / monitoreo | Disco al 80 %, cAdvisor sin contenedores recreados y panel de disponibilidad duplicado | Alta | Resuelta |
+| 20 | 2026-11-25 | Nube / CI | Llevar Jenkins y SonarQube a Azure sin agotar la cuota compartida | Media | Resuelta (VM de CI en Chile Central) |
+| 21 | 2026-11-25 | CI | En la nube falla `recordCoverage`: plugins de Jenkins sin version fija | Alta | Resuelta (plugins fijados) |
 
 ---
 
@@ -163,6 +165,21 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 - **Nueva ejecucion / resultado:** Ansible `ok=28 changed=6 failed=0`; queda una sola version de cada imagen; `/var/lib/containerd` 12 GB → 1.2 GB; **disco 80 % → 44 %**; 10 contenedores *Up* y la app responde 200; cAdvisor reporta 12 series; el tablero muestra una sola serie "ARRIBA" y memoria/CPU por contenedor (captura `A-05b`).
 - **Leccion:** las capturas y la revision del tablero son tambien una forma de prueba: aqui revelaron un riesgo operativo (disco lleno) antes de que disparara la alerta.
 
+### 20. Llevar Jenkins y SonarQube a Azure sin agotar la cuota compartida
+- **Problema:** el CI corria en Docker en el equipo del desarrollador; se requiere en la nube. Jenkins + SonarQube necesitan ~8 GB de RAM (la VM de la aplicacion tiene 4 GB y ya usa ~1.4 GB).
+- **Evidencia:** `az vm list-usage -l northcentralus` → *Total Regional vCPUs* **4 de 6** (2 de la VM propia y 2 de la VM de la titular de la suscripcion, que cuentan aunque esten apagadas). Una VM de CI de 2 vCPU llevaria la region a **6 de 6**. En Canada Central solo habia tamanos ARM; en Chile Central, `Standard_B2as_v2` (x86, 8 GB) disponible con cuota 0 de 6.
+- **Diagnostico:** crear el CI en North Central US agotaria la cuota de la region e impediria a la titular crear VMs ahi (riesgo de gobierno, ver #4). El CI no necesita red privada con la aplicacion (solo descarga el codigo de GitHub), asi que puede ir en otra region.
+- **Correccion:** `infra/terraform/ci.tf`: VM de CI `Standard_B2as_v2` en **Chile Central** con VNet, subred, NSG (8080, 9000, 22/443 solo desde la IP del administrador) e IP publica; **cloud-init** que habilita SSH en 443 desde el primer arranque. Rol de Ansible `base_docker` comun a ambas VMs y `playbook-ci.yml` (limites del kernel para SonarQube, `ci/docker-compose.yml` con imagenes fijadas por digest, restauracion unica de datos, rotacion de la contrasena de la BD de SonarQube). `migrar-ci.ps1` llevo los volumenes locales (jobs, historial, credenciales, BD de SonarQube; sin workspaces ni caches). Commits `9a34b5d`, `31877db`.
+- **Nueva ejecucion / resultado:** `terraform apply` → *8 added* (solo recursos nuevos); Ansible `ok=33 changed=17 failed=0`; segunda ejecucion con la restauracion omitida (`skipped=3`, idempotente). Jenkins y SonarQube 26.10 *UP* en Azure con los 3 jobs y su historial (captura `A-11b`).
+
+### 21. En la nube falla `recordCoverage`: plugins de Jenkins sin version fija
+- **Problema:** primeras ejecuciones en Azure, `admin-proyectos-api #9` y `admin-proyectos-front #7`: compilacion y pruebas OK, pero **FAILURE** en el paso posterior: `No such DSL method 'recordCoverage'`; SonarQube y Semgrep se omitieron.
+- **Evidencia:** log de arranque de Jenkins: `Failed Loading plugin Coverage Plugin v4.3627...` → `Update required: Checks API plugin (checks-api 422...) to be updated to 434...`; `Failed Loading plugin Forensics API Plugin v4.1977...` (logs en `evidencia-unidad3/04-ci-calidad-seguridad/jenkins-azure/`).
+- **Diagnostico:** el Dockerfile de Jenkins (heredado de la Practica 3) instalaba `jenkins-plugin-cli --plugins sonar coverage` **sin version**. Al construir la imagen en la VM nueva se descargo la ultima version de `coverage` (4.3627), incompatible con los plugins migrados (`coverage` 3.3497 en el Jenkins local). La imagen no era reproducible.
+- **Correccion:** `ci/jenkins/plugins.txt` con las **96 versiones exactas** del Jenkins que funciona y `jenkins-plugin-cli --plugin-file ... --latest false`. Verificado construyendo la imagen localmente (`coverage 3.3497`, 96 plugins). En la VM se retiraron los plugins del volumen para que Jenkins copiara los de la imagen. Commit `b334c17`.
+- **Nueva ejecucion / resultado:** Ansible `ok=29 changed=3 failed=0`; **0** errores de carga de plugins; en Azure: `admin-proyectos-api #10` **SUCCESS** (63 pruebas, cobertura OK, Quality Gate OK, Semgrep 1 hallazgo mitigado), `admin-proyectos-front #8` **SUCCESS** (39 pruebas), `admin-proyectos-bd #4` **SUCCESS** (BD-01…BD-08). Captura `A-11a`.
+- **Leccion:** toda dependencia de la infraestructura debe tener version fija (imagenes por digest, plugins por version) para que construir en otra maquina dé el mismo resultado.
+
 ---
 
 ## Resumen
@@ -170,8 +187,8 @@ Las incidencias de calidad y seguridad del pipeline CI (SonarQube, Semgrep, JaCo
 | Tipo | Cantidad | Incidencias |
 |---|---|---|
 | Defectos de codigo encontrados por pruebas de carga, alertas o SAST | 3 | 11, 13, 14 |
-| Configuracion de infraestructura / monitoreo / operacion | 8 | 3, 6, 7, 12, 15, 16, 18, 19 |
-| Entorno y herramientas (incluye CI) | 6 | 1, 2, 5, 8, 10, 17 |
+| Configuracion de infraestructura / monitoreo / operacion | 9 | 3, 6, 7, 12, 15, 16, 18, 19, 20 |
+| Entorno y herramientas (incluye CI) | 7 | 1, 2, 5, 8, 10, 17, 21 |
 | Riesgo de gobierno (suscripcion compartida) | 1 | 4 |
 | Por diseno (seguridad) | 1 | 9 |
 

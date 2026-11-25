@@ -20,12 +20,12 @@ Diseñar, implementar y demostrar un circuito DevOps funcional para el sistema *
 
 **Incluye:**
 - Contenerización de la API y el front (Docker) y orquestación local/nube con Docker Compose.
-- Pipeline CI en Jenkins: compilación, pruebas (Surefire), cobertura (JaCoCo), calidad (SonarQube + Quality Gate) y SAST (Semgrep).
+- Pipeline CI en **Jenkins y SonarQube desplegados en Azure** (VM de CI propia, creada con Terraform y configurada con Ansible): compilación, pruebas (Surefire), cobertura (JaCoCo), calidad (SonarQube + Quality Gate) y SAST (Semgrep).
 - Aprovisionamiento en Azure con **Terraform** (red, firewall, IP pública, VM) y configuración/despliegue con **Ansible**.
 - Monitoreo y observabilidad: métricas (Prometheus), tablero (Grafana), alertas (reglas + Alertmanager) y logs centralizados (Loki + Alloy).
 - Prueba de carga controlada con **k6** y análisis de latencia, throughput y errores.
 
-**No incluye:** alta disponibilidad (una sola VM), HTTPS con dominio propio, trazas distribuidas (ver §9) ni despliegue continuo disparado automáticamente por Jenkins (el despliegue se ejecuta con un comando reproducible; ver §9).
+**No incluye:** alta disponibilidad (una VM por servidor), HTTPS con dominio propio, trazas distribuidas (ver §9) ni despliegue continuo disparado automáticamente por Jenkins (el despliegue se ejecuta con un comando reproducible; ver §9).
 
 ## 3. Tecnologías seleccionadas y justificación
 
@@ -34,7 +34,7 @@ Diseñar, implementar y demostrar un circuito DevOps funcional para el sistema *
 | Versionado | Git + GitHub | — | Historial verificable, dos repositorios (API y front). |
 | Lenguaje / framework | Java + Spring Boot | 21 / 3.5.16 | Base del proyecto; LTS. |
 | Contenedores | Docker + Docker Compose | 29 | El mismo stack se ejecuta en local y en la nube. |
-| CI | Jenkins (en Docker) | LTS JDK 17 + JDK 21 | Pipeline como código (`Jenkinsfile`), usado en Unidades II y III. |
+| CI | Jenkins en Azure (VM de CI, Docker Compose) | 2.587 (JDK 21), 96 plugins con versión fija | Pipeline como código (`Jenkinsfile`), usado en las Unidades II y III; en la Unidad III se llevó a la nube con IaC junto con SonarQube. |
 | Pruebas y cobertura | Maven Surefire + JaCoCo | 3.5.6 / 0.8.15 | Reportes estándar; regla `jacoco:check` al 100 % de métodos. |
 | Calidad | SonarQube + SonarScanner Maven | 5.5.0.6356 | Quality Gate y deuda técnica. |
 | SAST | Semgrep | OWASP Top 10, `p/java`, `p/secrets` + reglas propias | Ligero, reglas versionadas en `.semgrep/`. |
@@ -56,7 +56,7 @@ El diagrama de componentes, conexiones, puertos y la explicación del flujo desd
 Resumen del circuito:
 
 ```
-git push → GitHub → Jenkins (build, Surefire, JaCoCo, SonarQube+QG, Semgrep)
+git push → GitHub → Jenkins en Azure (build, Surefire, JaCoCo, SonarQube+QG, Semgrep)
         → terraform plan/apply (Azure: RG, VNet, NSG, IP, VM) → inventario
         → Ansible (Docker, daemon.json, git clone, .env 600, compose up, verificación)
         → VM: PostgreSQL + API + front  ←  usuarios / k6
@@ -77,6 +77,8 @@ git push → GitHub → Jenkins (build, Surefire, JaCoCo, SonarQube+QG, Semgrep)
 | `infra/desplegar-ansible.ps1` | Ejecuta el playbook dentro de un contenedor. |
 | `pruebas-carga/` | Escenario k6, resultados y análisis. |
 | `Jenkinsfile`, `.semgrep/`, `database/` | Pipeline CI, reglas SAST propias y pipeline de BD (Práctica 3). |
+| `ci/` | Servidor de CI: `docker-compose.yml` (Jenkins, SonarQube y sus PostgreSQL, imágenes fijadas por digest) y `jenkins/Dockerfile` + `plugins.txt`. |
+| `infra/terraform/ci.tf`, `infra/ansible/playbook-ci.yml`, `infra/ansible/roles/base_docker/`, `infra/migrar-ci.ps1` | IaC del servidor de CI, rol común de Docker y migración única de datos. |
 | `docs/` | Este informe, arquitectura, bitácora y evidencias. |
 
 ### 5.2 Reproducción desde cero
@@ -117,6 +119,8 @@ Ejecutar solo la aplicación en local: `cd deploy; copy .env.example .env; docke
 
 **Servicio:** Azure Virtual Machine `vm-gusmendez-devops`, `Standard_B2als_v2` (2 vCPU AMD, 4 GB RAM), Ubuntu 24.04 LTS, disco de 30 GB, IP pública estática con DNS `gusmendez-devops-fa6883.northcentralus.cloudapp.azure.com`, red `10.10.0.0/16` con NSG. 6 recursos de Azure gestionados por Terraform; `terraform plan` reporta *No changes* (sin deriva). Evidencia: [`evidencias/infraestructura-azure.txt`](evidencias/infraestructura-azure.txt).
 
+**Servidor de CI:** Azure Virtual Machine `vm-gusmendez-devops-ci`, `Standard_B2as_v2` (2 vCPU AMD, 8 GB RAM), Ubuntu 24.04 LTS, disco de 64 GB, en **Chile Central** (para no agotar la cuota de vCPU de North Central US, compartida con otro proyecto de la suscripción; bitácora #20), con VNet `10.20.0.0/16`, NSG propio (8080, 9000 y SSH solo desde la IP del administrador) e IP pública con DNS `gusmendez-devops-ci-fa6883.chilecentral.cloudapp.azure.com`. Corre Jenkins 2.587 y SonarQube 26.10 (+ PostgreSQL) en Docker Compose. En total Terraform gestiona **12 recursos** de Azure (captura `A-11b`).
+
 **Verificación de integración** ([`evidencias/verificacion-servicios.txt`](evidencias/verificacion-servicios.txt)):
 
 | Componente | Verificación | Resultado |
@@ -138,7 +142,8 @@ Ejecutados en Jenkins durante las Unidades II–III (evidencias originales en el
 
 | Reporte | Resultado |
 |---|---|
-| Pipelines Jenkins sobre el **código final** (24 nov) | Los 3 con **SUCCESS**: `admin-proyectos-api #8` (`0ab3c00`), `admin-proyectos-front #6` (`58d0e9b`), `admin-proyectos-bd #3`. Antes: api #6 y front #4 FAILURE por token de SonarQube vencido (bitácora #17). Logs en el portafolio `evidencia-unidad3/04-ci-calidad-seguridad/` |
+| Pipelines en **Jenkins en Azure** (25 nov) | Los 3 con **SUCCESS**: `admin-proyectos-api #10` (63 pruebas, cobertura y Quality Gate OK), `admin-proyectos-front #8` (39 pruebas), `admin-proyectos-bd #4` (BD-01…BD-08). Antes: api #9 y front #7 FAILURE por plugins sin versión fija (bitácora #21). Logs en `evidencia-unidad3/04-ci-calidad-seguridad/jenkins-azure/` |
+| Pipelines en Jenkins local sobre el código final (24 nov) | Los 3 con **SUCCESS**: `admin-proyectos-api #8` (`0ab3c00`), `admin-proyectos-front #6` (`58d0e9b`), `admin-proyectos-bd #3`. Antes: api #6 y front #4 FAILURE por token de SonarQube vencido (bitácora #17). Logs en el portafolio `evidencia-unidad3/04-ci-calidad-seguridad/` |
 | Pruebas (Surefire) | API: 63 pruebas · front: 39 pruebas (38 + regresión AUT-E17 de esta unidad), 0 fallos; BD: BD-01…BD-08 OK |
 | Cobertura (JaCoCo) | **100 %** de métodos, líneas y ramas en ambos; la regla `jacoco:check` rompe el build si baja. Sin exclusiones (el `main` se prueba con `mockStatic`). |
 | SonarQube (Community Build 26.10) | Re-ejecución final: Quality Gate **OK** en ambos; 0 bugs, 0 vulnerabilidades, 0 code smells, 0 hotspots; calificaciones A. Antes de la corrección: 18 vulnerabilidades `java:S4684` (CWE-915, calificación D), corregidas con DTOs |
@@ -157,6 +162,9 @@ Ejecutados en Jenkins durante las Unidades II–III (evidencias originales en el
 | Ansible, configuración de Docker | `ok=23 changed=5 failed=0` (handler *Reiniciar Docker*) |
 | Ansible, redespliegues posteriores | `ok=21–22 changed=1 failed=0` |
 | Ansible por SSH en 443 (red que bloquea el 22) | `ok=25 changed=4 failed=0` |
+| `terraform apply` del servidor de CI | *8 added, 1 changed* (solo recursos nuevos + regla de IP) |
+| Ansible `playbook-ci.yml` (instalación + migración) | `ok=33 changed=17 failed=0` |
+| Ansible `playbook-ci.yml` (segunda ejecución) | `ok=29 changed=3 failed=0`, restauración omitida (`skipped=3`): idempotente |
 
 ### 7.3 Monitoreo y observabilidad
 
@@ -200,7 +208,7 @@ Detalle completo en **[pruebas-carga/README.md](../pruebas-carga/README.md)**. E
 
 ## 8. Bitácora de incidencias
 
-Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (19 incidencias). Las más relevantes:
+Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejecución y resultado en **[docs/bitacora-incidencias.md](bitacora-incidencias.md)** (21 incidencias). Las más relevantes:
 
 | # | Incidencia | Corrección |
 |---|---|---|
@@ -209,6 +217,8 @@ Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejec
 | 13 | El front respondía 503 sin dejar rastro en los logs | `log.warn` en el manejador; verificado en Loki |
 | 14 | Semgrep: `/actuator/prometheus` accesible desde Internet | Actuator en puerto interno 9081/9082; ahora HTTP 404 desde fuera |
 | 16 | La red bloquea SSH (22): riesgo para la demo en vivo | SSH alternativo en 443 gestionado por Terraform + Ansible |
+| 20 | Llevar el CI a Azure sin agotar la cuota de vCPU compartida | VM de CI en Chile Central con Terraform + Ansible; datos migrados |
+| 21 | En la nube falló `recordCoverage` (plugins sin versión) | 96 plugins con versión exacta: imagen reproducible |
 | 18 | Falso positivo de `LatenciaP95Alta` con poco tráfico (recursos estáticos) | La regla excluye `/**` y exige ≥ 0.1 req/s |
 | 19 | Disco al 80 % (imágenes viejas + 12 GB huérfanos de containerd) y cAdvisor ciego tras cada despliegue | Limpieza automática en Ansible, reinicio de cAdvisor; disco 80 % → 44 % |
 | 7 | Riesgo de romper la conexión a la BD al regenerar contraseñas | El playbook conserva los secretos existentes |
@@ -226,7 +236,7 @@ Registro completo con problema, evidencia, diagnóstico, corrección, nueva ejec
 ### Limitaciones
 - **Una sola VM:** no hay alta disponibilidad ni balanceo; una falla de la VM detiene el servicio.
 - **HTTP sin TLS:** no se configuró HTTPS (requeriría dominio y certificado, p. ej. Caddy + Let's Encrypt).
-- **Despliegue continuo semiautomático:** Jenkins corre en el equipo local (Docker) y el despliegue se ejecuta con `desplegar-ansible.ps1`; no se conectó Jenkins a la VM para no exponer la llave SSH en un servidor CI sin endurecer.
+- **Despliegue continuo semiautomático:** Jenkins ya corre en Azure, pero el despliegue de la aplicación se ejecuta con `desplegar-ansible.ps1`; no se dio a Jenkins la llave SSH de la VM de la aplicación para no exponerla en un servidor de CI sin endurecer (sin HTTPS).
 - **Trazas distribuidas:** no se implementaron; con dos servicios y llamadas síncronas simples, las métricas por endpoint y los logs fueron suficientes para diagnosticar. Sería el siguiente paso con OpenTelemetry + Tempo.
 - **Alertas sin canal externo:** Alertmanager registra las alertas pero no envía correo/Slack (requeriría credenciales).
 - **Suscripción prestada y con política de regiones:** limita la región y obliga a apagar la VM cuando no se usa.
@@ -237,7 +247,7 @@ Etapa de despliegue en Jenkins con credencial SSH, backend remoto de Terraform, 
 
 ## 10. Referencias
 
-- Repositorio API: https://github.com/gusmendez3249/admin-proyectos-api — commits de esta unidad: `f1f6215`, `e5e293c`, `ef65b53`, `412d1d8`, `7c040c3`, `0ab3c00` (y la documentación).
+- Repositorio API: https://github.com/gusmendez3249/admin-proyectos-api — commits de esta unidad: `f1f6215`, `e5e293c`, `ef65b53`, `412d1d8`, `7c040c3`, `0ab3c00`, `b000b14`, `86f82e2`, `9a34b5d` y `31877db` (servidor de CI), `b334c17` (plugins fijados) y la documentación.
 - Repositorio front: https://github.com/gusmendez3249/admin-proyectos-front — commits: `981d14a`, `71c9f73`, `36cc74b`, `58d0e9b`.
 - Terraform AzureRM provider: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
 - Ansible: https://docs.ansible.com/ansible/latest/
@@ -266,3 +276,4 @@ Capturas tomadas el 24/11/2026 sobre el entorno real; se incluyen en el **Anexo 
 | A-08 | Reporte HTML de k6 (ejecución 2) | Rendimiento |
 | A-09 | Prometheus: 5/5 objetivos *UP* | Monitoreo |
 | A-10a / A-10b / A-10c | Jenkins (3 pipelines en verde, etapas) y SonarQube (Quality Gate *Passed*) | CI/CD, calidad y seguridad |
+| A-11a / A-11b | Jenkins **en Azure** (api #10, front #8, bd #4 en verde; #9 fallido de la incidencia #21) y recursos de CI en Chile Central con Jenkins y SonarQube corriendo | CI/CD en la nube |

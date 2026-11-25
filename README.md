@@ -14,8 +14,9 @@ API REST del sistema **admin-proyectos** (Gestor de Proyectos) en Java 21 / Spri
 |---|---|
 | `src/` | Código y pruebas de la API (JUnit, JaCoCo 100 %) |
 | `Jenkinsfile`, `.semgrep/`, `database/` | Pipeline CI: build, pruebas, SonarQube, Semgrep; pipeline de BD |
+| `ci/` | Servidor de CI en Azure: Jenkins + SonarQube (Docker Compose, versiones fijas) |
 | `Dockerfile`, `deploy/` | Imagen de la API y stack Docker Compose (app + monitoreo) |
-| `infra/` | Terraform y Ansible |
+| `infra/` | Terraform y Ansible (VM de la aplicación y VM de CI) |
 | `pruebas-carga/` | Escenario k6 y resultados |
 
 ## Ejecución local rápida

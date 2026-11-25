@@ -46,3 +46,23 @@ az vm deallocate -g rg-gusmendez-devops -n vm-gusmendez-devops   # apagar (deja 
 az vm start      -g rg-gusmendez-devops -n vm-gusmendez-devops   # encender
 terraform -chdir=infra\terraform destroy                      # eliminar todo al terminar el curso
 ```
+
+## Servidor de CI en Azure (Jenkins + SonarQube)
+
+| Pieza | Archivo |
+|---|---|
+| VM de CI `Standard_B2as_v2` (8 GB) en **Chile Central**, VNet, NSG (8080, 9000 y SSH solo desde la IP del administrador), IP pública, cloud-init con SSH en 443 | `terraform/ci.tf` |
+| Rol común a ambas VMs: sistema base, swap, SSH en 443, Docker | `ansible/roles/base_docker/` |
+| Kernel para SonarQube, despliegue de `ci/`, restauración única de datos, rotación de la contraseña de la BD de SonarQube, verificación | `ansible/playbook-ci.yml` |
+| Jenkins 2.587 (96 plugins con versión fija) + SonarQube 26.10 + PostgreSQL | `../ci/` |
+| Migración única desde el laboratorio local | `migrar-ci.ps1` |
+
+Se usa otra región porque la cuota de vCPU de North Central US es compartida con otro proyecto de la suscripción y esta VM la agotaría (bitácora #20).
+
+```powershell
+terraform -chdir=infra\terraform apply                                   # crea/actualiza ambas VMs
+powershell -File infra\migrar-ci.ps1                                     # solo la primera vez (datos del CI local)
+powershell -File infra\desplegar-ansible.ps1 -Playbook ci [-PuertoSsh 443]
+terraform -chdir=infra\terraform output url_jenkins                      # http://...chilecentral...:8080
+az vm deallocate -g rg-gusmendez-devops -n vm-gusmendez-devops-ci        # apagar el CI cuando no se use
+```
