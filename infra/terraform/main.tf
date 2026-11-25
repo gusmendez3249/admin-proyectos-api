@@ -126,12 +126,15 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 }
 
-# Inventario de Ansible generado a partir de la IP real de la VM
+# Inventario de Ansible generado a partir de las IP reales de las VMs (aplicacion y CI)
 resource "local_file" "inventario_ansible" {
   filename        = "${path.module}/../ansible/inventario.ini"
   file_permission = "0644"
   content         = <<-EOT
     [app]
     ${azurerm_public_ip.pip.ip_address} ansible_user=${var.usuario_admin}
+
+    [ci]
+    ${azurerm_public_ip.ci.ip_address} ansible_user=${var.usuario_admin} dns_publico=${azurerm_public_ip.ci.fqdn}
   EOT
 }

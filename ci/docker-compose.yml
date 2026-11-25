@@ -1,0 +1,84 @@
+# Servidor de integracion continua en Azure (VM de CI, ver infra/terraform/ci.tf):
+#   Jenkins (pipelines del front, la API y la BD) + SonarQube (+ su PostgreSQL)
+#   + PostgreSQL efimero para el pipeline de base de datos.
+# Lo despliega Ansible (infra/ansible/playbook-ci.yml). Los puertos solo son accesibles
+# desde la IP del administrador (NSG). Las credenciales llegan por el archivo .env (no versionado).
+name: admin-proyectos-ci
+
+services:
+  sonarqube-db:
+    # Misma imagen (digest) que el laboratorio local de las Unidades II y III: los datos migrados son compatibles
+    image: postgres:16@sha256:a902560563d3a5661228585f53474c5065e7f273b21ffd77e555a8b5682c5690
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:?Define SONAR_DB_PASSWORD en .env}
+      POSTGRES_DB: sonarqube
+    volumes:
+      - sonarqube_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonarqube"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  sonarqube:
+    # SonarQube Community Build 26.10 fijado por digest (una version distinta exigiria migrar la BD)
+    image: sonarqube@sha256:0b3408443fb6a311253de27941b10977c9b977fd53be2265947bfe14161308b8
+    restart: unless-stopped
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASSWORD}
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+  # PostgreSQL del pipeline de base de datos (crea y borra una BD efimera por ejecucion).
+  # En Jenkins es la credencial "postgres-ci"; sin puerto publicado.
+  postgres-ci:
+    image: postgres:16@sha256:a902560563d3a5661228585f53474c5065e7f273b21ffd77e555a8b5682c5690
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ${POSTGRES_CI_PASSWORD:-ci}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_ci:/var/lib/postgresql/data
+
+  jenkins:
+    # Jenkins 2.587 (JDK 21) + Semgrep + SQLFluff + psql + plugins de SonarQube y cobertura
+    build: ./jenkins
+    image: admin-proyectos-jenkins:2.587-jdk21
+    restart: unless-stopped
+    depends_on:
+      - postgres-ci
+    environment:
+      # Sin desactivar el asistente inicial: en una instalacion nueva Jenkins exige crear el administrador
+      JAVA_OPTS: "-Xmx1g"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+volumes:
+  sonarqube_db:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+  postgres_ci:
+  jenkins_home:

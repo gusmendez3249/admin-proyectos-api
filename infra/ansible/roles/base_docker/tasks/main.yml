@@ -1,0 +1,96 @@
+# Rol comun a las VMs de la aplicacion y de CI: sistema base, swap, SSH alternativo en 443
+# y Docker Engine + Compose desde el repositorio oficial, con la configuracion del demonio.
+# ---------- Sistema base ----------
+- name: Instalar paquetes base
+  ansible.builtin.apt:
+    name: [ca-certificates, curl, git, gnupg]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Crear archivo swap de 2 GB (holgura de memoria para las JVM)
+  ansible.builtin.command: >
+    bash -c "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
+  args:
+    creates: /swapfile
+
+- name: Hacer persistente el swap
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "/swapfile none swap sw 0 0"
+
+# ---------- SSH alternativo en 443 ----------
+# Algunas redes (p. ej. la de la escuela) bloquean el puerto 22 de salida. sshd tambien
+# escucha en 443; el NSG solo lo permite desde la IP del administrador (bitacora #16).
+- name: Crear carpeta de ajustes del socket de SSH
+  ansible.builtin.file:
+    path: /etc/systemd/system/ssh.socket.d
+    state: directory
+    mode: "0755"
+
+- name: Escuchar SSH tambien en el puerto 443
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ssh.socket.d/puerto-443.conf
+    mode: "0644"
+    content: |
+      [Socket]
+      ListenStream=0.0.0.0:443
+  notify: Reiniciar socket de SSH
+
+# ---------- Docker (repositorio oficial) ----------
+- name: Crear carpeta de llaves de apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Descargar llave GPG de Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Agregar repositorio de Docker
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable
+    filename: docker
+    state: present
+
+- name: Instalar Docker Engine y el plugin compose
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    state: present
+    update_cache: true
+
+- name: Configurar el demonio de Docker (almacen overlay2 y rotacion de logs)
+  # - containerd-snapshotter=false: Docker 29 usa por defecto el almacen de containerd y
+  #   cAdvisor no puede identificar las capas de los contenedores con el (bitacora #12).
+  # - Rotacion de logs: evita que los logs de los contenedores llenen el disco.
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: |
+      {
+        "features": { "containerd-snapshotter": false },
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" }
+      }
+  notify: Reiniciar Docker
+
+- name: Habilitar el servicio Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Aplicar ahora la configuracion de Docker si cambio
+  ansible.builtin.meta: flush_handlers
+
+- name: Permitir al usuario administrador usar Docker
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+

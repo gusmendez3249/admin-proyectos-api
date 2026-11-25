@@ -1,0 +1,163 @@
+# Configuracion del servidor de CI (VM creada por infra/terraform/ci.tf) y despliegue de
+# Jenkins + SonarQube (ci/docker-compose.yml). Idempotente.
+# Ejecucion: powershell -File infra\desplegar-ansible.ps1 -Playbook ci [-PuertoSsh 443]
+#
+# Migracion (una sola vez): si existen respaldos en /opt/ci-respaldo/*.tgz (subidos con
+# infra/migrar-ci.ps1) y la VM aun no los restauro, se cargan en los volumenes antes del primer
+# arranque. Asi se conservan jobs, historial, credenciales de Jenkins y la BD de SonarQube.
+- name: Configurar servidor de CI y desplegar Jenkins + SonarQube
+  hosts: ci
+  become: true
+  vars:
+    repo_api: https://github.com/gusmendez3249/admin-proyectos-api.git
+    rama: main
+    dir_app: /opt/admin-proyectos
+    dir_ci: /opt/admin-proyectos/ci
+    dir_respaldo: /opt/ci-respaldo
+    proyecto: admin-proyectos-ci
+    volumenes_respaldo: [jenkins_home, sonarqube_db, sonarqube_extensions]
+    pw_aleatoria: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=24) }}"
+
+  pre_tasks:
+    - name: Esperar a que la VM acepte conexiones SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Leer el .env existente (si ya hubo un despliegue)
+      ansible.builtin.slurp:
+        src: "{{ dir_ci }}/.env"
+      register: env_actual
+      failed_when: false
+      no_log: true
+
+    - name: Resolver la contrasena de la BD de SonarQube (conservar la existente)
+      ansible.builtin.set_fact:
+        sonar_db_password: >-
+          {{ (env_actual.content | default('') | b64decode | regex_search('(?m)^SONAR_DB_PASSWORD=(.+)$', '\1') | default([], true) | first)
+             | default(lookup('env', 'SONAR_DB_PASSWORD'), true) | default(pw_aleatoria, true) }}
+      no_log: true
+
+  roles:
+    - base_docker
+
+  tasks:
+    # ---------- Requisitos del kernel para SonarQube (Elasticsearch embebido) ----------
+    - name: Ajustar limites del kernel para SonarQube
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-sonarqube.conf
+        mode: "0644"
+        content: |
+          vm.max_map_count=524288
+          fs.file-max=131072
+      register: sysctl_sonar
+
+    - name: Aplicar los limites del kernel
+      ansible.builtin.command: sysctl --system
+      when: sysctl_sonar.changed
+
+    # ---------- Codigo y configuracion ----------
+    - name: Clonar o actualizar el repositorio (contiene ci/)
+      ansible.builtin.git:
+        repo: "{{ repo_api }}"
+        dest: "{{ dir_app }}"
+        version: "{{ rama }}"
+        force: true
+      register: repo
+
+    - name: Generar el .env del CI con permisos restringidos
+      ansible.builtin.copy:
+        dest: "{{ dir_ci }}/.env"
+        mode: "0600"
+        content: |
+          SONAR_DB_PASSWORD={{ sonar_db_password }}
+      no_log: true
+
+    - name: Construir la imagen de Jenkins y crear contenedores y volumenes (sin arrancar)
+      ansible.builtin.command: docker compose up --no-start --build
+      args:
+        chdir: "{{ dir_ci }}"
+      register: creacion
+      changed_when: "'Created' in creacion.stderr or 'Built' in creacion.stderr"
+
+    # ---------- Migracion de datos (una sola vez) ----------
+    - name: Ver si hay respaldos pendientes de restaurar
+      ansible.builtin.stat:
+        path: "{{ dir_respaldo }}/jenkins_home.tgz"
+      register: respaldo
+
+    - name: Ver si los respaldos ya se restauraron
+      ansible.builtin.stat:
+        path: "{{ dir_respaldo }}/.restaurado"
+      register: restaurado
+
+    - name: Restaurar los volumenes desde los respaldos
+      ansible.builtin.command: >-
+        docker run --rm -v {{ proyecto }}_{{ item }}:/v -v {{ dir_respaldo }}:/b:ro alpine
+        sh -c "rm -rf /v/* /v/.[!.]* 2>/dev/null; tar -xpzf /b/{{ item }}.tgz -C /v"
+      loop: "{{ volumenes_respaldo }}"
+      when: respaldo.stat.exists and not restaurado.stat.exists
+
+    - name: Marcar la migracion como hecha
+      ansible.builtin.file:
+        path: "{{ dir_respaldo }}/.restaurado"
+        state: touch
+        mode: "0644"
+      when: respaldo.stat.exists and not restaurado.stat.exists
+
+    - name: Apuntar la URL de Jenkins al DNS publico del servidor de CI
+      ansible.builtin.replace:
+        path: "/var/lib/docker/volumes/{{ proyecto }}_jenkins_home/_data/jenkins.model.JenkinsLocationConfiguration.xml"
+        regexp: '<jenkinsUrl>[^<]*</jenkinsUrl>'
+        replace: "<jenkinsUrl>http://{{ dns_publico }}:8080/</jenkinsUrl>"
+      failed_when: false
+
+    # ---------- Base de datos de SonarQube ----------
+    - name: Arrancar la BD de SonarQube
+      ansible.builtin.command: docker compose up -d --wait sonarqube-db
+      args:
+        chdir: "{{ dir_ci }}"
+      changed_when: false
+
+    - name: Fijar la contrasena del usuario sonar a la del .env
+      # PostgreSQL solo usa POSTGRES_PASSWORD al inicializar el volumen; con datos migrados la
+      # contrasena seria la del laboratorio local. Se rota aqui (idempotente).
+      ansible.builtin.command: >-
+        docker compose exec -T sonarqube-db psql -U sonar -d sonarqube -v ON_ERROR_STOP=1
+        -c "ALTER USER sonar WITH PASSWORD '{{ sonar_db_password }}'"
+      args:
+        chdir: "{{ dir_ci }}"
+      changed_when: false
+      no_log: true
+
+    # ---------- Arranque y verificacion ----------
+    - name: Levantar Jenkins y SonarQube
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ dir_ci }}"
+      register: arranque
+      changed_when: "'Started' in arranque.stderr or 'Recreated' in arranque.stderr"
+
+    - name: Esperar a que Jenkins responda
+      ansible.builtin.uri:
+        url: http://localhost:8080/login
+        status_code: 200
+      register: jenkins
+      until: jenkins.status == 200
+      retries: 36
+      delay: 10
+
+    - name: Esperar a que SonarQube este operativo (la primera vez reconstruye su indice)
+      ansible.builtin.uri:
+        url: http://localhost:9000/api/system/status
+        return_content: true
+      register: sonar
+      until: sonar.status == 200 and sonar.json.status == 'UP'
+      retries: 60
+      delay: 10
+
+    - name: Mostrar resultado
+      ansible.builtin.debug:
+        msg: >-
+          CI desplegado (repo {{ repo.after[:7] }}).
+          Jenkins: http://{{ dns_publico }}:8080 |
+          SonarQube {{ sonar.json.version }}: http://{{ dns_publico }}:9000
