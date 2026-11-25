@@ -16,6 +16,10 @@ RUN apt-get update \
 
 USER jenkins
 
+# Plugins con version EXACTA (plugins.txt, 96 plugins tomados del Jenkins que funciona):
+# sin versiones fijas, cada build de la imagen descargaba la ultima version de "coverage",
+# incompatible con el resto de plugins, y el paso recordCoverage dejaba de existir (bitacora #21).
 # sonar    -> withSonarQubeEnv / waitForQualityGate
 # coverage -> recordCoverage (publica el reporte JaCoCo)
-RUN jenkins-plugin-cli --plugins sonar coverage
+COPY --chown=jenkins:jenkins plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt --latest false
